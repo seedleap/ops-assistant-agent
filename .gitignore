@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+data
+config/seedleap-gemini-config.json
+*.log
+runs
+__pycache__
+*.pyc

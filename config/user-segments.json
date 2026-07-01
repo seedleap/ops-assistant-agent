@@ -1,0 +1,22 @@
+[
+  {
+    "key": "new-creators",
+    "name": "新创作用户",
+    "definition": "近 7 天注册、且至少发布过 1 个作品的创作者。"
+  },
+  {
+    "key": "active-creators",
+    "name": "活跃创作者",
+    "definition": "近 30 天有发布或编辑过作品的创作者。"
+  },
+  {
+    "key": "churn-risk",
+    "name": "流失风险创作者",
+    "definition": "曾经活跃，但最近 14 天没有任何创作 / 发布动作的创作者。"
+  },
+  {
+    "key": "top-creators",
+    "name": "头部创作者",
+    "definition": "有作品进过热门推荐池，或累计获赞较高的创作者。"
+  }
+]

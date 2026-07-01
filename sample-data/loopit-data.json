@@ -1,0 +1,147 @@
+{
+  "updatedAt": "2026-06-23T00:00:00.000Z",
+  "users": [
+    {
+      "uid": "u_demo_001",
+      "displayName": "Demo Creator A",
+      "region": "CN"
+    },
+    {
+      "uid": "u_demo_002",
+      "displayName": "Demo Creator B",
+      "region": "US"
+    }
+  ],
+  "projects": [
+    {
+      "pid": "p_demo_1001",
+      "uid": "u_demo_001",
+      "title": "都市夜跑挑战",
+      "status": "published",
+      "createdAt": "2026-06-18T10:00:00.000Z",
+      "profile": {
+        "category": "interactive_story",
+        "language": "zh-CN",
+        "qualityGrade": "A",
+        "publishChannel": "loopit"
+      },
+      "prompt": {
+        "latest": "创建一个第一人称都市夜跑互动体验，用户需要躲避障碍并收集能量。",
+        "version": 3,
+        "updatedAt": "2026-06-20T08:30:00.000Z"
+      },
+      "consumption": [
+        {
+          "date": "2026-06-20",
+          "vv": 1280,
+          "uv": 920,
+          "avgWatchSeconds": 42,
+          "completionRate": 0.38,
+          "likeCount": 84,
+          "shareCount": 12
+        },
+        {
+          "date": "2026-06-21",
+          "vv": 2140,
+          "uv": 1510,
+          "avgWatchSeconds": 49,
+          "completionRate": 0.44,
+          "likeCount": 176,
+          "shareCount": 31
+        },
+        {
+          "date": "2026-06-22",
+          "vv": 1880,
+          "uv": 1344,
+          "avgWatchSeconds": 45,
+          "completionRate": 0.41,
+          "likeCount": 143,
+          "shareCount": 24
+        }
+      ],
+      "comments": [
+        {
+          "id": "c_demo_001",
+          "createdAt": "2026-06-22T09:10:00.000Z",
+          "text": "节奏挺爽，想要更多关卡。",
+          "likeCount": 18,
+          "sentiment": "positive"
+        },
+        {
+          "id": "c_demo_002",
+          "createdAt": "2026-06-22T12:40:00.000Z",
+          "text": "第三段障碍有点突然，失败后提示可以更明显。",
+          "likeCount": 11,
+          "sentiment": "mixed"
+        }
+      ]
+    },
+    {
+      "pid": "p_demo_1002",
+      "uid": "u_demo_001",
+      "title": "咖啡店经营日",
+      "status": "published",
+      "createdAt": "2026-06-15T14:20:00.000Z",
+      "profile": {
+        "category": "simulation",
+        "language": "zh-CN",
+        "qualityGrade": "B+",
+        "publishChannel": "loopit"
+      },
+      "prompt": {
+        "latest": "制作一个轻量咖啡店经营模拟，玩家安排菜单、座位和员工。",
+        "version": 2,
+        "updatedAt": "2026-06-16T11:00:00.000Z"
+      },
+      "consumption": [
+        {
+          "date": "2026-06-20",
+          "vv": 760,
+          "uv": 590,
+          "avgWatchSeconds": 36,
+          "completionRate": 0.31,
+          "likeCount": 39,
+          "shareCount": 5
+        },
+        {
+          "date": "2026-06-21",
+          "vv": 690,
+          "uv": 544,
+          "avgWatchSeconds": 34,
+          "completionRate": 0.29,
+          "likeCount": 35,
+          "shareCount": 4
+        }
+      ],
+      "comments": [
+        {
+          "id": "c_demo_003",
+          "createdAt": "2026-06-21T15:21:00.000Z",
+          "text": "画风舒服，但目标感不太强。",
+          "likeCount": 9,
+          "sentiment": "mixed"
+        }
+      ]
+    },
+    {
+      "pid": "p_demo_2001",
+      "uid": "u_demo_002",
+      "title": "Space Garden",
+      "status": "draft",
+      "createdAt": "2026-06-19T16:45:00.000Z",
+      "profile": {
+        "category": "creative_tool",
+        "language": "en-US",
+        "qualityGrade": "A-",
+        "publishChannel": "loopit"
+      },
+      "prompt": {
+        "latest": "Build a cozy space garden where users place plants on floating asteroids.",
+        "version": 1,
+        "updatedAt": "2026-06-19T16:45:00.000Z"
+      },
+      "consumption": [],
+      "comments": []
+    }
+  ]
+}

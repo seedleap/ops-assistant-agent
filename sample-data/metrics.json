@@ -1,0 +1,23 @@
+{
+  "updatedAt": "2026-06-23T00:00:00.000Z",
+  "metrics": [
+    {
+      "name": "dau",
+      "value": 128430,
+      "changePct": 3.2,
+      "window": "today"
+    },
+    {
+      "name": "new_users",
+      "value": 18420,
+      "changePct": -7.8,
+      "window": "today"
+    },
+    {
+      "name": "retention_d1",
+      "value": 0.421,
+      "changePct": -2.1,
+      "window": "yesterday"
+    }
+  ]
+}

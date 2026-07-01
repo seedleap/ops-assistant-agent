@@ -1,0 +1,26 @@
+{
+  "name": "ops-assistant-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "query": "python3 scripts/ops_query.py",
+    "query:data": "tsx src/loopitDataCli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.63.1",
+    "@sinclair/typebox": "^0.34.41",
+    "dotenv": "^16.4.0",
+    "express": "^5.0.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  }
+}
