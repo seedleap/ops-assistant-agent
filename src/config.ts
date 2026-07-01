@@ -52,7 +52,6 @@ export interface AppConfig {
   skillsDir: string;
   pythonBin: string;
   opsQueryScript: string;
-  loopitDataOpsDir?: string;
   publicDir: string;
   systemPromptFile: string;
   segmentsFile: string;
@@ -76,9 +75,6 @@ export function loadConfig(): AppConfig {
     skillsDir: resolve(process.env.SKILLS_DIR || "./skills"),
     pythonBin: process.env.PYTHON_BIN || "python3",
     opsQueryScript: resolve(process.env.OPS_QUERY_SCRIPT || "./scripts/ops_query.py"),
-    loopitDataOpsDir: process.env.LOOPIT_DATA_OPS_DIR
-      ? resolve(process.env.LOOPIT_DATA_OPS_DIR)
-      : undefined,
     publicDir: resolve(process.env.PUBLIC_DIR || "./public"),
     systemPromptFile: resolve(process.env.SYSTEM_PROMPT_FILE || "./config/system-prompt.md"),
     segmentsFile: resolve(process.env.SEGMENTS_FILE || "./config/user-segments.json"),

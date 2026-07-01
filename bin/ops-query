@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # 运营数据查询 CLI：按 UID / PID 查真实作品数据（消费 / 评论 / prompt / 画像 / 作品列表）。
-# 底层走 loopit-data-ops gateway → 阿里云 MaxCompute。
+# 底层走 OPS_SQL_GATEWAY_URL 或 OPS_SQL_GATEWAY_CMD 指向的只读 SQL 网关。
 #
 # 示例：
 #   ./bin/ops-query overview     --pid <PID> --days 7 --pretty

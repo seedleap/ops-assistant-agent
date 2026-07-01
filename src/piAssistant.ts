@@ -126,7 +126,6 @@ export class PiAssistant {
           ...createOpsDataTools({
             pythonBin: this.config.pythonBin,
             scriptPath: this.config.opsQueryScript,
-            dataOpsDir: this.config.loopitDataOpsDir,
           }),
           createReadKnowledgeTool(this.config.skillsDir),
           createListSkillDocsTool(this.config.skillsDir),

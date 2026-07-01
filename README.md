@@ -22,24 +22,33 @@
 ```text
 智能体查询工具
   -> scripts/ops_query.py
-  -> loopit-data-ops 的 gateway_tool.py
-  -> OpenClaw 命令行
-  -> 阿里云 MaxCompute
+  -> 只读 SQL 网关（由部署环境配置）
+  -> 数据仓库
 ```
 
-`scripts/ops_query.py` 是数据查询入口。它会按固定口径生成只读查询，把结果整理成适合智能体理解的 JSON。
+`scripts/ops_query.py` 是数据查询入口。它只做两件事：
 
-默认会使用本机这个路径下的数据查询能力：
+- 按固定口径生成只读 SQL。
+- 调用当前项目配置的 SQL 网关，把结果整理成适合智能体理解的 JSON。
 
-```text
-~/.claude/skills/loopit-data-ops
-```
-
-如果安装路径不同，可以在 `.env` 里设置：
+项目本身不依赖任何本机其他项目。部署时在 `.env` 里配置其中一种网关即可：
 
 ```bash
-LOOPIT_DATA_OPS_DIR=/你的/loopit-data-ops/路径
+# 方式一：HTTP 网关
+OPS_SQL_GATEWAY_URL=https://your-sql-gateway.example.com/query
+OPS_SQL_GATEWAY_TOKEN=
+
+# 方式二：命令行网关
+OPS_SQL_GATEWAY_CMD=
 ```
+
+HTTP 网关接收 JSON：
+
+```json
+{"sql":"SELECT ...", "timeoutMs":120000}
+```
+
+命令行网关从标准输入读取同样的 JSON，并向标准输出写出查询结果 JSON。
 
 当前覆盖的数据包括：
 
@@ -75,13 +84,15 @@ ASSISTANT_DRY_RUN=true
 如果要真实调用模型，需要配置 Gemini 凭据。默认凭据文件路径是：
 
 ```text
-config/seedleap-gemini-config.json
+config/google-credentials.json
 ```
 
 下面这些文件不会提交到代码仓库：
 
 - `.env`
-- `config/seedleap-gemini-config.json`
+- `config/*credential*.json`
+- `config/*credentials*.json`
+- `config/*-config.json`
 - `data/`
 - `runs/`
 - `dist/`
@@ -94,12 +105,12 @@ config/seedleap-gemini-config.json
 - Node.js 和 pnpm。
 - Python 3。
 - Gemini 凭据，或设置 `ASSISTANT_DRY_RUN=true`。
-- 已安装并可用的 `loopit-data-ops`。
+- 可用的只读 SQL 网关，或设置 `ASSISTANT_DRY_RUN=true` 只验证本地链路。
 
-可以用下面的命令检查数据查询通道：
+可以先用 dry-run 启动，确认项目自身可以独立运行：
 
 ```bash
-python3 ~/.claude/skills/loopit-data-ops/scripts/gateway_tool.py --doctor
+ASSISTANT_DRY_RUN=true pnpm dev
 ```
 
 ## 常用接口
@@ -154,7 +165,7 @@ curl -X POST http://localhost:8010/outbox/<messageId>/deliver
 
 ## 直接查数据
 
-也可以不启动服务，直接用命令行查真实数据：
+配置好 SQL 网关后，也可以不启动服务，直接用命令行查真实数据：
 
 ```bash
 ./bin/ops-query overview --pid <PID> --days 7 --pretty

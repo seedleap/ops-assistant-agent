@@ -8,7 +8,6 @@ const execFileAsync = promisify(execFile);
 export interface OpsQueryConfig {
   pythonBin: string;
   scriptPath: string;
-  dataOpsDir?: string;
   timeoutMs?: number;
 }
 
@@ -20,7 +19,7 @@ interface ToolResult {
 
 /**
  * 执行 ops_query.py 子命令，拿回它打印的干净 JSON。
- * 真实数据走 loopit-data-ops 的 OpenClaw gateway → 阿里云 MaxCompute。
+ * 真实数据由 OPS_SQL_GATEWAY_URL 或 OPS_SQL_GATEWAY_CMD 指向的只读 SQL 网关提供。
  */
 async function runOpsQuery(
   config: OpsQueryConfig,
@@ -28,13 +27,9 @@ async function runOpsQuery(
   flags: string[],
 ): Promise<ToolResult> {
   const args = [config.scriptPath, subcommand, ...flags];
-  const env = { ...process.env };
-  if (config.dataOpsDir) {
-    env.LOOPIT_DATA_OPS_DIR = config.dataOpsDir;
-  }
   try {
     const { stdout } = await execFileAsync(config.pythonBin, args, {
-      env,
+      env: { ...process.env },
       timeout: config.timeoutMs ?? 180_000,
       maxBuffer: 16 * 1024 * 1024,
     });

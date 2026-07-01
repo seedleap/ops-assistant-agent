@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Loopit 运营数据查询引擎。
 
-按 UID / PID 查询真实作品数据，底层走 loopit-data-ops 的 OpenClaw gateway 打到
-阿里云 MaxCompute。每个子命令构建一段经过审计口径的 SQL，执行后整理成干净的
-JSON 给上层（agent 工具 / 人）使用。
+按 UID / PID 查询真实作品数据。每个子命令构建一段经过审计口径的 SQL，
+交给项目外部配置的只读 SQL 网关执行，再整理成干净的 JSON 给上层
+（智能体工具 / 人）使用。
 
 子命令：
   works        --uid <uid>            某创作者的作品列表
@@ -22,27 +22,16 @@ import argparse
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
-# --- 定位 loopit-data-ops gateway（真实数据出口） ---------------------------------
-DATA_OPS_DIR = Path(
-    os.environ.get("LOOPIT_DATA_OPS_DIR")
-    or (Path.home() / ".claude" / "skills" / "loopit-data-ops")
-).expanduser()
-DATA_OPS_SCRIPTS = DATA_OPS_DIR / "scripts"
-GATEWAY_TOOL = DATA_OPS_SCRIPTS / "gateway_tool.py"
 
-if str(DATA_OPS_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(DATA_OPS_SCRIPTS))
-
-try:
-    from sql_utils import normalize_sql  # type: ignore
-except Exception:  # pragma: no cover - sql_utils 缺失时退化为本地极简归一化
-    def normalize_sql(sql: str) -> str:
-        return " ".join(sql.replace("\n", " ").split()).rstrip(";")
+def normalize_sql(sql: str) -> str:
+    return " ".join(sql.replace("\n", " ").split()).rstrip(";")
 
 TZ8 = timezone(timedelta(hours=8))
 
@@ -86,35 +75,12 @@ def to_yyyymmdd(d: datetime) -> str:
     return d.strftime("%Y%m%d")
 
 
-# --- gateway 执行 ----------------------------------------------------------------
-def run_sql(sql: str, timeout_ms: int) -> dict:
-    """执行只读 SQL，返回 {columns, rowCount, rows, truncated}。"""
-    if not GATEWAY_TOOL.exists():
-        raise QueryError(
-            f"找不到 gateway: {GATEWAY_TOOL}。"
-            "请确认 loopit-data-ops skill 已安装，或设置 LOOPIT_DATA_OPS_DIR。"
-        )
-    sql_send = normalize_sql(sql)
-    args_json = json.dumps({"sql": sql_send}, ensure_ascii=False)
-    cmd = [
-        sys.executable,
-        str(GATEWAY_TOOL),
-        "aliyun_mc_query",
-        "--args-json",
-        args_json,
-        "--timeout",
-        str(timeout_ms),
-    ]
-    proc = subprocess.run(cmd, text=True, capture_output=True, env=os.environ.copy())
-    if proc.returncode != 0:
-        msg = (proc.stderr or proc.stdout or "").strip()
-        raise QueryError(f"gateway 执行失败：{msg[:1200]}")
-    try:
-        envelope = json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        raise QueryError(f"gateway 返回非 JSON：{exc}; raw={proc.stdout[:500]}")
-
-    data = (envelope.get("details") or {}).get("json")
+# --- SQL 网关执行 ----------------------------------------------------------------
+def extract_sql_result(envelope: dict) -> dict:
+    """兼容直接结果、details.json、content[0].text 三种常见返回形态。"""
+    data = envelope if "rows" in envelope else None
+    if data is None:
+        data = (envelope.get("details") or {}).get("json")
     if data is None:
         content = envelope.get("content") or []
         if content and isinstance(content[0], dict) and "text" in content[0]:
@@ -123,8 +89,75 @@ def run_sql(sql: str, timeout_ms: int) -> dict:
             except json.JSONDecodeError:
                 data = None
     if not isinstance(data, dict) or "rows" not in data:
-        raise QueryError(f"无法解析查询结果：{json.dumps(envelope, ensure_ascii=False)[:500]}")
+        raise QueryError(f"无法解析 SQL 网关返回：{json.dumps(envelope, ensure_ascii=False)[:500]}")
     return data
+
+
+def run_sql_via_http(request_body: dict, timeout_ms: int) -> dict:
+    url = os.environ.get("OPS_SQL_GATEWAY_URL", "").strip()
+    token = os.environ.get("OPS_SQL_GATEWAY_TOKEN", "").strip()
+    headers = {"content-type": "application/json"}
+    if token:
+        headers["authorization"] = f"Bearer {token}"
+    req = Request(
+        url,
+        data=json.dumps(request_body, ensure_ascii=False).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urlopen(req, timeout=max(1, timeout_ms / 1000)) as resp:
+            raw = resp.read().decode("utf-8")
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise QueryError(f"SQL 网关 HTTP {exc.code}：{detail[:1200]}") from exc
+    except URLError as exc:
+        raise QueryError(f"SQL 网关连接失败：{exc.reason}") from exc
+    try:
+        return extract_sql_result(json.loads(raw))
+    except json.JSONDecodeError as exc:
+        raise QueryError(f"SQL 网关返回非 JSON：{exc}; raw={raw[:500]}") from exc
+
+
+def run_sql_via_command(request_body: dict, timeout_ms: int) -> dict:
+    raw_cmd = os.environ.get("OPS_SQL_GATEWAY_CMD", "").strip()
+    cmd = shlex.split(raw_cmd)
+    if not cmd:
+        raise QueryError("OPS_SQL_GATEWAY_CMD 为空。")
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=json.dumps(request_body, ensure_ascii=False),
+            text=True,
+            capture_output=True,
+            timeout=max(1, timeout_ms / 1000),
+            env=os.environ.copy(),
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise QueryError(f"SQL 网关命令超时：{raw_cmd}") from exc
+    if proc.returncode != 0:
+        msg = (proc.stderr or proc.stdout or "").strip()
+        raise QueryError(f"SQL 网关命令失败：{msg[:1200]}")
+    try:
+        return extract_sql_result(json.loads(proc.stdout))
+    except json.JSONDecodeError as exc:
+        raise QueryError(f"SQL 网关命令返回非 JSON：{exc}; raw={proc.stdout[:500]}") from exc
+
+
+def run_sql(sql: str, timeout_ms: int) -> dict:
+    """执行只读 SQL，返回 {columns, rowCount, rows, truncated}。"""
+    request_body = {
+        "sql": normalize_sql(sql),
+        "timeoutMs": timeout_ms,
+    }
+    if os.environ.get("OPS_SQL_GATEWAY_URL", "").strip():
+        return run_sql_via_http(request_body, timeout_ms)
+    if os.environ.get("OPS_SQL_GATEWAY_CMD", "").strip():
+        return run_sql_via_command(request_body, timeout_ms)
+    raise QueryError(
+        "未配置 SQL 查询网关。请设置 OPS_SQL_GATEWAY_URL（HTTP 网关）"
+        "或 OPS_SQL_GATEWAY_CMD（本项目自己的网关命令）。"
+    )
 
 
 # --- 取数小工具 ------------------------------------------------------------------
