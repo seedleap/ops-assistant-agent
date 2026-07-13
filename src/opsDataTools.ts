@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { Type } from "@sinclair/typebox";
-import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 
 const execFileAsync = promisify(execFile);
 
@@ -26,6 +26,7 @@ async function runOpsQuery(
   subcommand: string,
   flags: string[],
 ): Promise<ToolResult> {
+  const startedAt = Date.now();
   const args = [config.scriptPath, subcommand, ...flags];
   try {
     const { stdout } = await execFileAsync(config.pythonBin, args, {
@@ -36,22 +37,44 @@ async function runOpsQuery(
     const raw = stdout.trim();
     let ok = true;
     let text = raw;
+    let traceError: string | undefined;
     try {
       const parsed = JSON.parse(raw);
       ok = parsed.ok !== false;
+      traceError = typeof parsed.error === "string" ? parsed.error : undefined;
       // 口径、表名等内部细节固定在脚本里，不暴露给 agent（降低自由度，避免乱解读/泄露）。
       delete parsed.source;
       delete parsed.note;
       text = JSON.stringify(parsed);
     } catch {
       ok = false;
+      traceError = "ops query returned invalid JSON";
     }
-    return { content: [{ type: "text", text }], details: { ok }, isError: !ok };
+    return {
+      content: [{ type: "text", text }],
+      details: {
+        ok,
+        queryKind: subcommand,
+        durationMs: Date.now() - startedAt,
+        ...(traceError ? { error: traceError } : {}),
+      },
+      isError: !ok,
+    };
   } catch (err) {
     const error = err as { stdout?: string; stderr?: string; message?: string };
+    const traceError = error.stderr?.trim() || error.message || "query failed";
     const text = (error.stdout && error.stdout.trim()) ||
-      JSON.stringify({ ok: false, error: error.stderr?.trim() || error.message || "query failed" });
-    return { content: [{ type: "text", text }], details: { ok: false }, isError: true };
+      JSON.stringify({ ok: false, error: traceError });
+    return {
+      content: [{ type: "text", text }],
+      details: {
+        ok: false,
+        queryKind: subcommand,
+        durationMs: Date.now() - startedAt,
+        error: traceError,
+      },
+      isError: true,
+    };
   }
 }
 

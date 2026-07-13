@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+node_modules
+dist
+data
+runs
+coverage
+*.log
+config/*credential*.json
+config/*credentials*.json
+config/*-config.json

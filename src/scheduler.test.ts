@@ -4,19 +4,49 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 import type { AppConfig } from "./config.js";
-import { PiAssistant } from "./piAssistant.js";
+import { OpsAssistant } from "./agent/assistant.js";
 import { OutreachScheduler } from "./scheduler.js";
 import { JsonStore } from "./store.js";
+import pino from "pino";
+
+const testLogger = pino({ enabled: false });
 
 function testConfig(dataDir: string): AppConfig {
   return {
+    nodeEnv: "test",
+    logLevel: "silent",
+    host: "127.0.0.1",
     port: 0,
+    corsOrigins: "*",
+    auth: { mode: "none" },
+    rateLimit: { windowMs: 60_000, max: 120 },
     dataDir,
+    schedulerEnabled: true,
     schedulerPollMs: 60_000,
     defaultOutreachSilentMinutes: 60,
     interactiveSessionTimeoutMinutes: 60,
     assistantDryRun: true,
-    opsDataFile: join(process.cwd(), "sample-data", "metrics.json"),
+    modelWhitelist: ["google-vertex/gemini-3-flash-preview"],
+    interactiveAgent: {
+      provider: "google-vertex",
+      modelId: "gemini-3-flash-preview",
+      thinkingLevel: "low",
+      temperature: 0.3,
+      maxTurns: 10,
+      timeoutMs: 120_000,
+    },
+    outreachAgent: {
+      provider: "google-vertex",
+      modelId: "gemini-3-flash-preview",
+      thinkingLevel: "off",
+      temperature: 0.2,
+      maxTurns: 6,
+      timeoutMs: 90_000,
+    },
+    langfuse: {
+      enabled: false,
+      environment: "test",
+    },
     loopitDataFile: join(process.cwd(), "sample-data", "loopit-data.json"),
     skillsDir: join(process.cwd(), "skills"),
     pythonBin: "python3",
@@ -33,8 +63,8 @@ test("scheduler defers outreach until the configured silent window passes", asyn
   try {
     const config = testConfig(dir);
     const store = await JsonStore.open(dir);
-    const assistant = new PiAssistant(config);
-    const scheduler = new OutreachScheduler(config, store, assistant);
+    const assistant = new OpsAssistant(config);
+    const scheduler = new OutreachScheduler(config, store, assistant, testLogger);
 
     const base = new Date("2026-06-23T10:00:00.000Z");
     await store.recordUserMessage({ userId: "u1", text: "hello", createdAt: base });

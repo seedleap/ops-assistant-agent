@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { Mutex } from "async-mutex";
 import type {
   AssistantRunRecord,
   ConversationRecord,
@@ -32,6 +33,8 @@ function initialState(): StoreState {
 }
 
 export class JsonStore {
+  private readonly saveMutex = new Mutex();
+
   private constructor(
     private readonly filePath: string,
     private state: StoreState,
@@ -54,10 +57,12 @@ export class JsonStore {
   }
 
   async save(): Promise<void> {
-    await mkdir(dirname(this.filePath), { recursive: true });
-    const tmp = `${this.filePath}.tmp`;
-    await writeFile(tmp, JSON.stringify(this.state, null, 2));
-    await rename(tmp, this.filePath);
+    await this.saveMutex.runExclusive(async () => {
+      await mkdir(dirname(this.filePath), { recursive: true });
+      const tmp = `${this.filePath}.tmp`;
+      await writeFile(tmp, JSON.stringify(this.state, null, 2));
+      await rename(tmp, this.filePath);
+    });
   }
 
   getConversation(userId: string, imThreadId = DEFAULT_THREAD_ID): ConversationRecord | undefined {

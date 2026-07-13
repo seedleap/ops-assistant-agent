@@ -59,9 +59,18 @@ HTTP 网关接收 JSON：
 
 所有业务日期按北京时间，也就是 UTC+8。
 
+## Agent 运行与观测
+
+项目使用最新版 `@earendil-works/pi-coding-agent` 管理模型、会话、重试、Compaction 和工具生命周期。交互对话与主动触达分别使用独立的 Agent Profile，可配置模型、thinking level、temperature、最大轮次和超时。
+
+配置 Langfuse 后，每次运行会生成 Agent → turn → tool 的分层 trace，并记录模型参数、工具状态、Token、费用和最终结果。Langfuse 未配置或不可用时不会阻塞 Agent 主流程。
+
+详细结构和边界见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
+
 ## 本地启动
 
 ```bash
+corepack enable
 pnpm install
 cp .env.example .env
 pnpm dev
@@ -110,8 +119,39 @@ config/google-credentials.json
 可以先用 dry-run 启动，确认项目自身可以独立运行：
 
 ```bash
-ASSISTANT_DRY_RUN=true pnpm dev
+ASSISTANT_DRY_RUN=true pnpm run dev:once
 ```
+
+环境变量会在进程启动时统一校验。端口、布尔值、模型参数、模型白名单或 Langfuse 凭据配置错误时，服务会直接给出具体配置项并退出，不会静默使用默认值。
+
+`CORS_ORIGINS=*` 便于本地预览；部署到线上时应改为逗号分隔的管理端来源，例如 `https://ops.loopit.example`。
+
+生产环境默认要求 HS256 JWT。通过 `API_JWT_SECRET` 配置后台与 Agent 服务共享的签名密钥，也可以用 `API_JWT_ISSUER`、`API_JWT_AUDIENCE` 进一步约束签发方和受众。`/health` 与静态页面保持公开，其余接口需要 `Authorization: Bearer <jwt>`。
+
+## 构建与生产运行
+
+项目要求 Node.js 22.19 及以上、pnpm 10。`packageManager` 字段固定了 pnpm 版本，CI 和本地统一使用 Corepack。
+
+```bash
+corepack enable
+pnpm install --frozen-lockfile
+pnpm run check
+pnpm start
+```
+
+`pnpm run check` 会依次执行类型检查、测试和生产构建。生产代码输出到 `dist/`，测试文件不会进入构建产物。
+
+容器构建：
+
+```bash
+docker build -t ops-assistant-agent .
+docker run --rm -p 8010:8010 \
+  --env-file .env.production \
+  -v ops-assistant-data:/app/data \
+  ops-assistant-agent
+```
+
+`.env.production` 应设置 `NODE_ENV=production`、`API_AUTH_MODE=jwt` 和强随机 `API_JWT_SECRET`。镜像使用非 root 用户运行，包含只读数据查询脚本所需的 Python 3，并提供 `/health` 容器健康检查。凭据文件应通过 secret 或只读 volume 注入，不会复制进镜像。
 
 ## 常用接口
 
@@ -188,7 +228,7 @@ curl -X POST http://localhost:8010/outbox/<messageId>/deliver
 - `query_creator_works`：查某个创作者的作品列表。
 - `read_knowledge`：读取运营知识库。
 
-具体什么时候用哪个工具，写在 [`skills/ops-assistant/SKILL.md`](skills/ops-assistant/SKILL.md)。
+具体工具选择和回复约束统一写在 `config/system-prompt.md`，运行时不会隐式加载其他 skill 指令。
 
 ## 配置文件
 
@@ -215,10 +255,15 @@ src/                    服务、智能体、调度器、工具定义
 ## 开发命令
 
 ```bash
-pnpm run typecheck
-pnpm test
+pnpm run check
+pnpm run dev:once
 pnpm run query -- overview --pid <PID> --days 7 --pretty
 ```
+
+- `pnpm dev`：监听源码变化并自动重启。
+- `pnpm run dev:once`：启动一次，适合脚本和冒烟测试。
+- `pnpm run build`：生成可部署的 `dist/`。
+- `pnpm start`：运行已经构建的生产代码。
 
 ## 接入到真实私信系统
 
