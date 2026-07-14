@@ -11,6 +11,10 @@ test("loadConfig parses explicit runtime values", () => {
     CORS_ORIGINS: "https://ops.loopit.example,https://admin.loopit.example",
     TRUST_PROXY_HOPS: "1",
     STATIC_UI_ENABLED: "false",
+    OPS_MCP_URL: "https://ops-data.example.com/mcp",
+    OPS_MCP_TOKEN: "service-token",
+    OPS_MCP_TIMEOUT_MS: "45000",
+    OPS_MCP_MAX_RESPONSE_BYTES: "1048576",
     SCHEDULER_ENABLED: "false",
     ASSISTANT_DRY_RUN: "true",
     ASSISTANT_MODEL_PROVIDER: "google-vertex",
@@ -24,6 +28,12 @@ test("loadConfig parses explicit runtime values", () => {
   assert.deepEqual(config.corsOrigins, ["https://ops.loopit.example", "https://admin.loopit.example"]);
   assert.equal(config.trustProxyHops, 1);
   assert.equal(config.staticUiEnabled, false);
+  assert.deepEqual(config.opsMcp, {
+    url: "https://ops-data.example.com/mcp",
+    token: "service-token",
+    timeoutMs: 45_000,
+    maxResponseBytes: 1_048_576,
+  });
   assert.equal(config.schedulerEnabled, false);
   assert.equal(config.assistantDryRun, true);
   assert.equal(config.interactiveAgent.temperature, 0.4);
@@ -31,8 +41,19 @@ test("loadConfig parses explicit runtime values", () => {
 
 test("loadConfig requires JWT authentication configuration in production", () => {
   assert.throws(
-    () => loadConfig({ NODE_ENV: "production" }),
+    () => loadConfig({ NODE_ENV: "production", ASSISTANT_DRY_RUN: "true" }),
     (error) => error instanceof ConfigError && error.message.includes("API_JWT_SECRET"),
+  );
+});
+
+test("loadConfig requires the remote MCP service for a live production agent", () => {
+  assert.throws(
+    () => loadConfig({
+      NODE_ENV: "production",
+      API_JWT_SECRET: "test-secret-that-is-at-least-32-characters",
+      ASSISTANT_DRY_RUN: "false",
+    }),
+    (error) => error instanceof ConfigError && error.message.includes("OPS_MCP_URL"),
   );
 });
 

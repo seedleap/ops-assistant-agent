@@ -1,8 +1,8 @@
 # Production deployment
 
 The production shape borrows the useful container boundaries from Carmack while
-remaining intentionally smaller. This service runs remote models and a remote
-read-only SQL gateway; it does not need Carmack's template prewarming, sandbox
+remaining intentionally smaller. This service runs remote models and calls a
+remote Loopit data MCP service; it does not need Carmack's template prewarming, sandbox
 containers, S3 sync tools, ffmpeg or autoscaling stack.
 
 ## Non-negotiable runtime boundary
@@ -45,7 +45,7 @@ Persistent paths include:
 
 ## Secrets
 
-Never bake `.env`, Google credentials, SQL gateway tokens or Langfuse keys into
+Never bake `.env`, Google credentials, MCP service tokens or Langfuse keys into
 the image. The required service secret should provide at least:
 
 ```text
@@ -53,8 +53,8 @@ API_JWT_SECRET
 LANGFUSE_PUBLIC_KEY
 LANGFUSE_SECRET_KEY
 GOOGLE_CLOUD_PROJECT
-OPS_SQL_GATEWAY_URL
-OPS_SQL_GATEWAY_TOKEN
+OPS_MCP_URL
+OPS_MCP_TOKEN
 ```
 
 Mount the Google service-account JSON separately at

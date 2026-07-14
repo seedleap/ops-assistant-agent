@@ -17,8 +17,8 @@ HTTP / scheduler
   → OpsSessionFactory
   → Pi AgentSession
   → Loopit custom tools
-  → Python query client
-  → read-only SQL gateway
+  → MCP client (Streamable HTTP)
+  → external Loopit data service
 ```
 
 Langfuse observes the same Pi lifecycle:
@@ -117,6 +117,7 @@ Trace payloads redact credentials, bearer tokens, SQL-like fields, private keys 
 Runtime dependencies remain intentionally small:
 
 - `@earendil-works/pi-coding-agent`: Agent runtime.
+- `@modelcontextprotocol/sdk`: official Streamable HTTP client for the external Loopit data service.
 - `@langfuse/otel`, `@langfuse/tracing`, `@opentelemetry/sdk-node`: optional tracing.
 - `@sinclair/typebox`: Pi tool schemas.
 - `express`, `cors`, `helmet`, `express-rate-limit`, `express-jwt`: HTTP and security boundary.
@@ -133,7 +134,7 @@ Use native `fetch`, `crypto`, `Date`, Node test runner and filesystem APIs. Do n
 - The configured interactive and outreach models must both be present in `MODEL_WHITELIST`.
 - `tsconfig.json` is the strict editor/test configuration; `tsconfig.build.json` emits only production source to `dist/`.
 - `pnpm run check` is the local and CI quality gate: typecheck, tests, then a clean production build.
-- The container image uses Node 22.19, runs as a non-root user, includes Python for the query adapter and excludes local credentials.
+- The container image uses Node 22.19, runs as a non-root user and excludes local credentials.
 - Production APIs use verified HS256 JWTs; health and static assets remain public.
 - Helmet, CORS and rate limiting are standard middleware rather than local implementations.
 
@@ -145,7 +146,7 @@ The current `JsonStore`, local scheduler, configuration UI and outbox remain MVP
 - durable scheduler/queue;
 - real segmentation service;
 - real IM sender;
-- optional MCP adapter over stable Loopit business APIs.
+- externally owned Loopit business APIs behind the stable data MCP contract.
 
 These infrastructure changes are independent from the Pi runtime refactor and should not be embedded into Agent prompts or tools.
 

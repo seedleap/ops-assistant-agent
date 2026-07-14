@@ -21,7 +21,6 @@
     "build": "pnpm run clean && tsc -p tsconfig.build.json",
     "start": "node --enable-source-maps dist/main.js",
     "check": "pnpm run typecheck && pnpm test && pnpm run build",
-    "query": "python3 scripts/ops_query.py",
     "query:data": "tsx src/loopitDataCli.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test \"src/**/*.test.ts\""
@@ -30,6 +29,7 @@
     "@earendil-works/pi-coding-agent": "0.80.6",
     "@langfuse/otel": "5.9.1",
     "@langfuse/tracing": "5.9.1",
+    "@modelcontextprotocol/sdk": "1.29.0",
     "@opentelemetry/sdk-node": "0.220.0",
     "@sinclair/typebox": "0.34.49",
     "async-mutex": "0.5.0",

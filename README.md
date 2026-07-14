@@ -21,34 +21,30 @@
 
 ```text
 智能体查询工具
-  -> scripts/ops_query.py
-  -> 只读 SQL 网关（由部署环境配置）
-  -> 数据仓库
+  -> 官方 MCP Client（Streamable HTTP）
+  -> Loopit 数据 MCP 服务
+  -> 外部业务 API / 数据服务
 ```
 
-`scripts/ops_query.py` 是数据查询入口。它只做两件事：
+本项目不生成 SQL，也不持有数据仓库口径。远端 MCP 服务提供以下六个只读业务工具：
 
-- 按固定口径生成只读 SQL。
-- 调用当前项目配置的 SQL 网关，把结果整理成适合智能体理解的 JSON。
+- `query_creator_works`
+- `query_work_profile`
+- `query_work_consumption`
+- `query_work_comments`
+- `query_work_prompt`
+- `query_work_overview`
 
-项目本身不依赖任何本机其他项目。部署时在 `.env` 里配置其中一种网关即可：
+部署时配置远程 Streamable HTTP endpoint：
 
 ```bash
-# 方式一：HTTP 网关
-OPS_SQL_GATEWAY_URL=https://your-sql-gateway.example.com/query
-OPS_SQL_GATEWAY_TOKEN=
-
-# 方式二：命令行网关
-OPS_SQL_GATEWAY_CMD=
+OPS_MCP_URL=https://ops-data.example.com/mcp
+OPS_MCP_TOKEN=<service-token>
+OPS_MCP_TIMEOUT_MS=120000
+OPS_MCP_MAX_RESPONSE_BYTES=2097152
 ```
 
-HTTP 网关接收 JSON：
-
-```json
-{"sql":"SELECT ...", "timeoutMs":120000}
-```
-
-命令行网关从标准输入读取同样的 JSON，并向标准输出写出查询结果 JSON。
+Agent 只允许调用这六个固定名称，不会动态接受远端新增工具。首次查询时执行 MCP 初始化与工具清单校验，服务进程关闭时主动关闭连接。
 
 当前覆盖的数据包括：
 
@@ -112,9 +108,8 @@ config/google-credentials.json
 需要本机具备：
 
 - Node.js 和 pnpm。
-- Python 3。
 - Gemini 凭据，或设置 `ASSISTANT_DRY_RUN=true`。
-- 可用的只读 SQL 网关，或设置 `ASSISTANT_DRY_RUN=true` 只验证本地链路。
+- 可用的 Loopit 数据 MCP 服务，或设置 `ASSISTANT_DRY_RUN=true` 只验证本地链路。
 
 可以先用 dry-run 启动，确认项目自身可以独立运行：
 
@@ -201,21 +196,6 @@ curl http://localhost:8010/outbox
 curl -X POST http://localhost:8010/outbox/<messageId>/deliver
 ```
 
-## 直接查数据
-
-配置好 SQL 网关后，也可以不启动服务，直接用命令行查真实数据：
-
-```bash
-./bin/ops-query overview --pid <PID> --days 7 --pretty
-./bin/ops-query consumption --pid <PID> --days 7
-./bin/ops-query consumption --pid <PID> --start 20260601 --end 20260607
-./bin/ops-query comments --pid <PID> --sort hot --limit 100
-./bin/ops-query comments --pid <PID> --sort latest --limit 100
-./bin/ops-query prompt --pid <PID> --rounds 5
-./bin/ops-query profile --pid <PID>
-./bin/ops-query works --uid <UID> --limit 20 --public
-```
-
 智能体内部会使用这些查询工具：
 
 - `query_work_overview`：查作品全貌。
@@ -243,19 +223,17 @@ bin/                    命令行入口
 config/                 系统提示、用户分层、定时任务配置
 public/                 本地聊天调试页面
 sample-data/            本地调试数据
-scripts/ops_query.py    真实 Loopit 数据查询入口
 skills/                 智能体可读取的运营知识库
-src/                    服务、智能体、调度器、工具定义
+src/                    服务、智能体、MCP client、调度器、工具定义
 ```
 
-`POST /data/query` 会读取 `sample-data/*.json`，用于本地离线调试。智能体正式查数据时走 `scripts/ops_query.py`。
+`POST /data/query` 会读取 `sample-data/*.json`，仅用于本地离线调试。智能体正式查数据时只走远程 MCP。
 
 ## 开发命令
 
 ```bash
 pnpm run check
 pnpm run dev:once
-pnpm run query -- overview --pid <PID> --days 7 --pretty
 ```
 
 - `pnpm dev`：监听源码变化并自动重启。

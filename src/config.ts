@@ -63,8 +63,10 @@ const environmentSchema = z.object({
 
   LOOPIT_DATA_FILE: z.string().trim().min(1).default("./sample-data/loopit-data.json"),
   SKILLS_DIR: z.string().trim().min(1).default("./skills"),
-  PYTHON_BIN: z.string().trim().min(1).default("python3"),
-  OPS_QUERY_SCRIPT: z.string().trim().min(1).default("./scripts/ops_query.py"),
+  OPS_MCP_URL: optionalString.pipe(z.string().url().optional()),
+  OPS_MCP_TOKEN: optionalString,
+  OPS_MCP_TIMEOUT_MS: positiveInteger(120_000),
+  OPS_MCP_MAX_RESPONSE_BYTES: positiveInteger(2 * 1024 * 1024),
   PUBLIC_DIR: z.string().trim().min(1).default("./public"),
   SYSTEM_PROMPT_FILE: z.string().trim().min(1).default("./config/system-prompt.md"),
   SEGMENTS_FILE: z.string().trim().min(1).default("./config/user-segments.json"),
@@ -75,6 +77,13 @@ const environmentSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["LANGFUSE_ENABLED"],
       message: "LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY are required when tracing is enabled",
+    });
+  }
+  if (env.NODE_ENV === "production" && !env.ASSISTANT_DRY_RUN && !env.OPS_MCP_URL) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["OPS_MCP_URL"],
+      message: "OPS_MCP_URL is required in production unless ASSISTANT_DRY_RUN=true",
     });
   }
 });
@@ -129,8 +138,12 @@ export interface AppConfig {
   langfuse: LangfuseConfig;
   loopitDataFile: string;
   skillsDir: string;
-  pythonBin: string;
-  opsQueryScript: string;
+  opsMcp: {
+    url?: string;
+    token?: string;
+    timeoutMs: number;
+    maxResponseBytes: number;
+  };
   publicDir: string;
   systemPromptFile: string;
   segmentsFile: string;
@@ -268,8 +281,12 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     },
     loopitDataFile: resolve(env.LOOPIT_DATA_FILE),
     skillsDir: resolve(env.SKILLS_DIR),
-    pythonBin: env.PYTHON_BIN,
-    opsQueryScript: resolve(env.OPS_QUERY_SCRIPT),
+    opsMcp: {
+      url: env.OPS_MCP_URL,
+      token: env.OPS_MCP_TOKEN,
+      timeoutMs: env.OPS_MCP_TIMEOUT_MS,
+      maxResponseBytes: env.OPS_MCP_MAX_RESPONSE_BYTES,
+    },
     publicDir: resolve(env.PUBLIC_DIR),
     systemPromptFile: resolve(env.SYSTEM_PROMPT_FILE),
     segmentsFile: resolve(env.SEGMENTS_FILE),

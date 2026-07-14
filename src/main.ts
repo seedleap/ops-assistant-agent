@@ -34,6 +34,9 @@ async function shutdown(signal: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     httpServer.close((error) => error ? reject(error) : resolve());
   });
+  await assistant.close().catch((error) => {
+    logger.error({ err: error }, "MCP client shutdown failed");
+  });
   await observability.shutdown().catch((error) => {
     logger.error({ err: error }, "observability shutdown failed");
   });

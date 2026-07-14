@@ -51,8 +51,10 @@ function testConfig(dataDir: string): AppConfig {
     },
     loopitDataFile: join(process.cwd(), "sample-data", "loopit-data.json"),
     skillsDir: join(process.cwd(), "skills"),
-    pythonBin: "python3",
-    opsQueryScript: join(process.cwd(), "scripts", "ops_query.py"),
+    opsMcp: {
+      timeoutMs: 120_000,
+      maxResponseBytes: 2 * 1024 * 1024,
+    },
     publicDir: join(process.cwd(), "public"),
     systemPromptFile: join(process.cwd(), "config", "system-prompt.md"),
     segmentsFile: join(process.cwd(), "config", "user-segments.json"),

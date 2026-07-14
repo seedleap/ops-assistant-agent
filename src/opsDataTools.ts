@@ -1,15 +1,6 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { Type } from "@sinclair/typebox";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
-
-const execFileAsync = promisify(execFile);
-
-export interface OpsQueryConfig {
-  pythonBin: string;
-  scriptPath: string;
-  timeoutMs?: number;
-}
+import type { OpsMcpCallResult, OpsMcpToolCaller, OpsMcpToolName } from "./opsMcpClient.js";
 
 interface ToolResult {
   content: Array<{ type: "text"; text: string }>;
@@ -17,59 +8,47 @@ interface ToolResult {
   isError?: boolean;
 }
 
-/**
- * 执行 ops_query.py 子命令，拿回它打印的干净 JSON。
- * 真实数据由 OPS_SQL_GATEWAY_URL 或 OPS_SQL_GATEWAY_CMD 指向的只读 SQL 网关提供。
- */
+function resultText(result: OpsMcpCallResult): string {
+  if (result.structuredContent) return JSON.stringify(result.structuredContent);
+  const text = result.content
+    ?.filter((item) => item.type === "text" && typeof item.text === "string")
+    .map((item) => item.text as string)
+    .join("\n")
+    .trim();
+  if (text) return text;
+  throw new Error("MCP tool returned no text or structured content");
+}
+
 async function runOpsQuery(
-  config: OpsQueryConfig,
-  subcommand: string,
-  flags: string[],
+  client: OpsMcpToolCaller,
+  toolName: OpsMcpToolName,
+  args: Record<string, unknown>,
 ): Promise<ToolResult> {
   const startedAt = Date.now();
-  const args = [config.scriptPath, subcommand, ...flags];
   try {
-    const { stdout } = await execFileAsync(config.pythonBin, args, {
-      env: { ...process.env },
-      timeout: config.timeoutMs ?? 180_000,
-      maxBuffer: 16 * 1024 * 1024,
-    });
-    const raw = stdout.trim();
-    let ok = true;
-    let text = raw;
-    let traceError: string | undefined;
-    try {
-      const parsed = JSON.parse(raw);
-      ok = parsed.ok !== false;
-      traceError = typeof parsed.error === "string" ? parsed.error : undefined;
-      // 口径、表名等内部细节固定在脚本里，不暴露给 agent（降低自由度，避免乱解读/泄露）。
-      delete parsed.source;
-      delete parsed.note;
-      text = JSON.stringify(parsed);
-    } catch {
-      ok = false;
-      traceError = "ops query returned invalid JSON";
-    }
+    const result = await client.callTool(toolName, args);
+    const text = resultText(result);
+    const ok = !result.isError;
     return {
       content: [{ type: "text", text }],
       details: {
         ok,
-        queryKind: subcommand,
+        transport: "mcp",
+        toolName,
         durationMs: Date.now() - startedAt,
-        ...(traceError ? { error: traceError } : {}),
+        ...(!ok ? { error: text } : {}),
       },
       isError: !ok,
     };
   } catch (err) {
-    const error = err as { stdout?: string; stderr?: string; message?: string };
-    const traceError = error.stderr?.trim() || error.message || "query failed";
-    const text = (error.stdout && error.stdout.trim()) ||
-      JSON.stringify({ ok: false, error: traceError });
+    const traceError = err instanceof Error ? err.message : String(err);
+    const text = JSON.stringify({ ok: false, error: "运营数据服务暂时不可用，请稍后重试。" });
     return {
       content: [{ type: "text", text }],
       details: {
         ok: false,
-        queryKind: subcommand,
+        transport: "mcp",
+        toolName,
         durationMs: Date.now() - startedAt,
         error: traceError,
       },
@@ -78,16 +57,7 @@ async function runOpsQuery(
   }
 }
 
-/** 把工具参数里的 string / number / boolean 转成 CLI flag。 */
-function flag(name: string, value: unknown, kind: "string" | "number" | "boolean" = "string"): string[] {
-  if (value === undefined || value === null || value === "") return [];
-  if (kind === "boolean") return value ? [name] : [];
-  if (kind === "number" && typeof value === "number") return [name, String(Math.floor(value))];
-  if (typeof value === "string") return [name, value];
-  return [];
-}
-
-export function createCreatorWorksTool(config: OpsQueryConfig): ToolDefinition {
+export function createCreatorWorksTool(client: OpsMcpToolCaller): ToolDefinition {
   return {
     name: "query_creator_works",
     label: "查创作者作品列表",
@@ -101,16 +71,12 @@ export function createCreatorWorksTool(config: OpsQueryConfig): ToolDefinition {
     }),
     execute: async (_id, params) => {
       const p = params as { uid: string; limit?: number; publicOnly?: boolean };
-      return runOpsQuery(config, "works", [
-        ...flag("--uid", p.uid),
-        ...flag("--limit", p.limit, "number"),
-        ...flag("--public", p.publicOnly, "boolean"),
-      ]);
+      return runOpsQuery(client, "query_creator_works", p);
     },
   };
 }
 
-export function createWorkProfileTool(config: OpsQueryConfig): ToolDefinition {
+export function createWorkProfileTool(client: OpsMcpToolCaller): ToolDefinition {
   return {
     name: "query_work_profile",
     label: "查作品画像",
@@ -123,12 +89,12 @@ export function createWorkProfileTool(config: OpsQueryConfig): ToolDefinition {
     }),
     execute: async (_id, params) => {
       const p = params as { pid: string; uid?: string };
-      return runOpsQuery(config, "profile", [...flag("--pid", p.pid), ...flag("--uid", p.uid)]);
+      return runOpsQuery(client, "query_work_profile", p);
     },
   };
 }
 
-export function createWorkConsumptionTool(config: OpsQueryConfig): ToolDefinition {
+export function createWorkConsumptionTool(client: OpsMcpToolCaller): ToolDefinition {
   return {
     name: "query_work_consumption",
     label: "查作品消费数据",
@@ -143,17 +109,12 @@ export function createWorkConsumptionTool(config: OpsQueryConfig): ToolDefinitio
     }),
     execute: async (_id, params) => {
       const p = params as { pid: string; days?: number; start?: string; end?: string };
-      return runOpsQuery(config, "consumption", [
-        ...flag("--pid", p.pid),
-        ...flag("--days", p.days, "number"),
-        ...flag("--start", p.start),
-        ...flag("--end", p.end),
-      ]);
+      return runOpsQuery(client, "query_work_consumption", p);
     },
   };
 }
 
-export function createWorkCommentsTool(config: OpsQueryConfig): ToolDefinition {
+export function createWorkCommentsTool(client: OpsMcpToolCaller): ToolDefinition {
   return {
     name: "query_work_comments",
     label: "查作品评论",
@@ -170,17 +131,12 @@ export function createWorkCommentsTool(config: OpsQueryConfig): ToolDefinition {
     }),
     execute: async (_id, params) => {
       const p = params as { pid: string; sort?: string; limit?: number; includeReplies?: boolean };
-      return runOpsQuery(config, "comments", [
-        ...flag("--pid", p.pid),
-        ...flag("--sort", p.sort),
-        ...flag("--limit", p.limit, "number"),
-        ...flag("--include-replies", p.includeReplies, "boolean"),
-      ]);
+      return runOpsQuery(client, "query_work_comments", p);
     },
   };
 }
 
-export function createWorkPromptTool(config: OpsQueryConfig): ToolDefinition {
+export function createWorkPromptTool(client: OpsMcpToolCaller): ToolDefinition {
   return {
     name: "query_work_prompt",
     label: "查作品创作历程",
@@ -196,16 +152,12 @@ export function createWorkPromptTool(config: OpsQueryConfig): ToolDefinition {
     }),
     execute: async (_id, params) => {
       const p = params as { pid: string; rounds?: number; full?: boolean };
-      return runOpsQuery(config, "prompt", [
-        ...flag("--pid", p.pid),
-        ...flag("--rounds", p.rounds, "number"),
-        ...flag("--full", p.full, "boolean"),
-      ]);
+      return runOpsQuery(client, "query_work_prompt", p);
     },
   };
 }
 
-export function createWorkOverviewTool(config: OpsQueryConfig): ToolDefinition {
+export function createWorkOverviewTool(client: OpsMcpToolCaller): ToolDefinition {
   return {
     name: "query_work_overview",
     label: "查作品全景概览",
@@ -218,18 +170,18 @@ export function createWorkOverviewTool(config: OpsQueryConfig): ToolDefinition {
     }),
     execute: async (_id, params) => {
       const p = params as { pid: string; days?: number };
-      return runOpsQuery(config, "overview", [...flag("--pid", p.pid), ...flag("--days", p.days, "number")]);
+      return runOpsQuery(client, "query_work_overview", p);
     },
   };
 }
 
-export function createOpsDataTools(config: OpsQueryConfig): ToolDefinition[] {
+export function createOpsDataTools(client: OpsMcpToolCaller): ToolDefinition[] {
   return [
-    createWorkOverviewTool(config),
-    createCreatorWorksTool(config),
-    createWorkProfileTool(config),
-    createWorkConsumptionTool(config),
-    createWorkCommentsTool(config),
-    createWorkPromptTool(config),
+    createWorkOverviewTool(client),
+    createCreatorWorksTool(client),
+    createWorkProfileTool(client),
+    createWorkConsumptionTool(client),
+    createWorkCommentsTool(client),
+    createWorkPromptTool(client),
   ];
 }

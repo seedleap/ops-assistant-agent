@@ -40,14 +40,12 @@ ENV NODE_ENV=production \
     SCHEDULED_TASKS_FILE=/app/data/config/scheduled-tasks.json \
     PUBLIC_DIR=/app/public \
     LOOPIT_DATA_FILE=/app/sample-data/loopit-data.json \
-    OPS_QUERY_SCRIPT=/app/scripts/ops_query.py \
-    PYTHON_BIN=python3 \
     HOME=/app/data/home \
     XDG_CACHE_HOME=/app/data/cache
 
 WORKDIR /app
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates python3 tini \
+    && apt-get install --yes --no-install-recommends ca-certificates tini \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app/data /app/seed/config /app/seed/skills \
     && chown -R node:node /app
@@ -57,7 +55,6 @@ COPY --from=build --chown=node:node /app/dist ./dist
 COPY --chown=node:node package.json ./package.json
 COPY --chown=node:node public ./public
 COPY --chown=node:node sample-data ./sample-data
-COPY --chown=node:node scripts ./scripts
 COPY --chown=node:node config ./seed/config
 COPY --chown=node:node skills ./seed/skills
 COPY --chown=node:node docker/entrypoint.sh ./docker/entrypoint.sh

@@ -23,6 +23,10 @@ export class OpsAssistant {
     this.sessions = new OpsSessionFactory(config, observability);
   }
 
+  close(): Promise<void> {
+    return this.sessions.close();
+  }
+
   async run(input: AssistantRunInput, emit?: AssistantEventHandler): Promise<string> {
     if (this.config.assistantDryRun) {
       const output = this.dryRun(input);

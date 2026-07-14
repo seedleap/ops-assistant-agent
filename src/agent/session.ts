@@ -11,6 +11,7 @@ import {
 import type { AppConfig } from "../config.js";
 import { createReadKnowledgeTool, knowledgeIndex } from "../knowledge.js";
 import { createOpsDataTools } from "../opsDataTools.js";
+import { RemoteOpsMcpClient } from "../opsMcpClient.js";
 import type { AssistantRunInput } from "../types.js";
 import { createAgentRunTrace, type AgentRunTrace } from "../observability/langfuse.js";
 import type { Observability } from "../observability/index.js";
@@ -32,18 +33,21 @@ export interface OpsSessionHandle {
 export class OpsSessionFactory {
   private modelsPromise?: Promise<OpsModelRegistry>;
   private readonly tools: ToolDefinition[];
+  private readonly opsMcp: RemoteOpsMcpClient;
 
   constructor(
     private readonly config: AppConfig,
     private readonly observability: Observability,
   ) {
+    this.opsMcp = new RemoteOpsMcpClient(config.opsMcp);
     this.tools = [
-      ...createOpsDataTools({
-        pythonBin: config.pythonBin,
-        scriptPath: config.opsQueryScript,
-      }),
+      ...createOpsDataTools(this.opsMcp),
       createReadKnowledgeTool(config.skillsDir),
     ];
+  }
+
+  close(): Promise<void> {
+    return this.opsMcp.close();
   }
 
   async create(profile: AgentProfile, input: AssistantRunInput): Promise<OpsSessionHandle> {
