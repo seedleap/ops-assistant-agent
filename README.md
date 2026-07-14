@@ -206,11 +206,12 @@ curl -X POST http://localhost:8010/outbox/<messageId>/deliver
 - `query_creator_works`：查某个创作者的作品列表。
 - `read_knowledge`：读取运营知识库。
 
-具体工具选择和回复约束统一写在 `config/system-prompt.md`，运行时不会隐式加载其他 skill 指令。
+每个 Agent 的模型默认值、工具白名单、语义化提示词版本和运行策略由 `src/agent/profiles/` 下的独立 Profile 声明；回复约束分别写在 `config/agent-profiles/`，运行时不会隐式加载其他 skill 指令。Langfuse trace 同时记录 Profile 的提示词版本与最终系统提示词哈希，便于区分运营热更新后的实际行为。
 
 ## 配置文件
 
-- `config/system-prompt.md`：智能体的系统提示词，可以通过页面或接口修改。
+- `config/agent-profiles/creator-chat.md`：创作者对话 Profile 的系统提示词。
+- `config/agent-profiles/creator-outreach.md`：主动触达 Profile 的系统提示词。
 - `config/user-segments.json`：用户分层配置。
 - `config/scheduled-tasks.json`：定时触达任务配置。
 - `skills/creator-guide/`：创作指导知识库。
@@ -220,7 +221,8 @@ curl -X POST http://localhost:8010/outbox/<messageId>/deliver
 
 ```text
 bin/                    命令行入口
-config/                 系统提示、用户分层、定时任务配置
+config/agent-profiles/  各 Agent Profile 的可运营系统提示
+config/                 用户分层、定时任务配置
 public/                 本地聊天调试页面
 sample-data/            本地调试数据
 skills/                 智能体可读取的运营知识库

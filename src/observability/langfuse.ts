@@ -9,7 +9,7 @@ import type {
   ExtensionFactory,
   SessionStats,
 } from "@earendil-works/pi-coding-agent";
-import type { AgentProfile } from "../agent/profiles.js";
+import type { AgentProfile } from "../agent/profiles/types.js";
 import type { AssistantRunInput } from "../types.js";
 import type { Observability } from "./index.js";
 import { errorMessage, sanitizeTraceValue } from "./sanitize.js";
@@ -58,15 +58,24 @@ export function createAgentRunTrace(
   observability: Observability,
   profile: AgentProfile,
   input: AssistantRunInput,
+  promptHash: string,
 ): AgentRunTrace | undefined {
   if (!observability.enabled) return undefined;
 
-  const tags = new Set<string>([input.type, profile.id, profile.modelId]);
+  const tags = new Set<string>([
+    input.type,
+    profile.id,
+    profile.modelId,
+    `prompt:${profile.promptVersion}`,
+    `prompt-sha256:${promptHash}`,
+  ]);
   const root = startObservation(profile.traceName, {
     input: sanitizeTraceValue(input.prompt),
     metadata: {
       runId: input.runId,
       runType: input.type,
+      promptVersion: profile.promptVersion,
+      promptHash,
       modelProvider: profile.provider,
       modelId: profile.modelId,
       thinkingLevel: profile.thinkingLevel,
@@ -161,6 +170,8 @@ export function createAgentRunTrace(
       root.update({
         output: sanitizeTraceValue(output),
         metadata: {
+          promptVersion: profile.promptVersion,
+          promptHash,
           ...(stats ? {
             inputTokens: stats.tokens.input,
             outputTokens: stats.tokens.output,

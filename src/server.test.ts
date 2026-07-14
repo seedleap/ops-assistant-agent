@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -18,6 +18,10 @@ const logger = pino({ enabled: false });
 test("health is public while API routes require a valid JWT", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "ops-http-"));
   try {
+    const promptsDir = join(dataDir, "agent-profiles");
+    await mkdir(promptsDir, { recursive: true });
+    await writeFile(join(promptsDir, "creator-chat.md"), "chat prompt");
+    await writeFile(join(promptsDir, "creator-outreach.md"), "outreach prompt");
     const config = loadConfig({
       NODE_ENV: "test",
       ASSISTANT_DRY_RUN: "true",
@@ -26,6 +30,7 @@ test("health is public while API routes require a valid JWT", async () => {
       CORS_ORIGINS: "https://ops.loopit.example",
       STATIC_UI_ENABLED: "false",
       DATA_DIR: dataDir,
+      AGENT_PROMPTS_DIR: promptsDir,
     });
     const store = await JsonStore.open(config.dataDir);
     const assistant = new OpsAssistant(config);
@@ -56,6 +61,49 @@ test("health is public while API routes require a valid JWT", async () => {
       .expect(200);
 
     assert.deepEqual(response.body.conversations, []);
+
+    const profiles = await request(app)
+      .get("/config/agent-profiles")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200);
+    assert.deepEqual(profiles.body.profiles.map((profile: { id: string }) => profile.id), [
+      "creator-chat",
+      "creator-outreach",
+    ]);
+    assert.equal(profiles.body.profiles[0].promptVersion, "creator-growth-v1");
+    assert.equal(profiles.body.profiles[1].promptVersion, "creator-outreach-v1");
+    assert.deepEqual(profiles.body.profiles[0].toolNames, [
+      "query_work_overview",
+      "query_creator_works",
+      "query_work_profile",
+      "query_work_consumption",
+      "query_work_comments",
+      "query_work_prompt",
+      "read_knowledge",
+    ]);
+
+    await request(app)
+      .get("/config/agent-profiles/creator-outreach/system-prompt")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200, { profileId: "creator-outreach", content: "outreach prompt" });
+    await request(app)
+      .put("/config/agent-profiles/creator-outreach/system-prompt")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ content: "updated outreach prompt" })
+      .expect(200, { ok: true, profileId: "creator-outreach" });
+    await request(app)
+      .put("/config/agent-profiles/creator-outreach/system-prompt")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ content: "   " })
+      .expect(400);
+    await request(app)
+      .get("/config/system-prompt")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200, { profileId: "creator-chat", content: "chat prompt" });
+    await request(app)
+      .get("/config/agent-profiles/unknown/system-prompt")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(404, { error: "unknown agent profile" });
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }

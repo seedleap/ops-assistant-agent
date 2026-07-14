@@ -1,6 +1,9 @@
 import "dotenv/config";
 import { isAbsolute, resolve } from "node:path";
 import { z } from "zod";
+import { CREATOR_CHAT_PROFILE } from "./agent/profiles/creator-chat.js";
+import { CREATOR_OUTREACH_PROFILE } from "./agent/profiles/creator-outreach.js";
+import type { AgentProfileConfig } from "./agent/profiles/types.js";
 
 const thinkingLevelSchema = z.enum(["off", "minimal", "low", "medium", "high"]);
 const optionalString = z.preprocess(
@@ -39,19 +42,19 @@ const environmentSchema = z.object({
   INTERACTIVE_SESSION_TIMEOUT_MINUTES: positiveNumber(60),
 
   ASSISTANT_DRY_RUN: booleanString(false),
-  ASSISTANT_MODEL_PROVIDER: z.string().trim().min(1).default("google-vertex"),
-  ASSISTANT_MODEL_ID: z.string().trim().min(1).default("gemini-3-flash-preview"),
-  ASSISTANT_THINKING_LEVEL: thinkingLevelSchema.default("low"),
-  ASSISTANT_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.3),
-  ASSISTANT_MAX_TURNS: positiveInteger(10),
-  ASSISTANT_TIMEOUT_MS: positiveInteger(120_000),
+  ASSISTANT_MODEL_PROVIDER: z.string().trim().min(1).default(CREATOR_CHAT_PROFILE.model.provider),
+  ASSISTANT_MODEL_ID: z.string().trim().min(1).default(CREATOR_CHAT_PROFILE.model.modelId),
+  ASSISTANT_THINKING_LEVEL: thinkingLevelSchema.default(CREATOR_CHAT_PROFILE.model.thinkingLevel),
+  ASSISTANT_TEMPERATURE: z.coerce.number().min(0).max(2).default(CREATOR_CHAT_PROFILE.model.temperature),
+  ASSISTANT_MAX_TURNS: positiveInteger(CREATOR_CHAT_PROFILE.runtime.maxTurns),
+  ASSISTANT_TIMEOUT_MS: positiveInteger(CREATOR_CHAT_PROFILE.runtime.timeoutMs),
 
   OUTREACH_MODEL_PROVIDER: optionalString,
   OUTREACH_MODEL_ID: optionalString,
-  OUTREACH_THINKING_LEVEL: thinkingLevelSchema.default("off"),
-  OUTREACH_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
-  OUTREACH_MAX_TURNS: positiveInteger(6),
-  OUTREACH_TIMEOUT_MS: positiveInteger(90_000),
+  OUTREACH_THINKING_LEVEL: thinkingLevelSchema.default(CREATOR_OUTREACH_PROFILE.model.thinkingLevel),
+  OUTREACH_TEMPERATURE: z.coerce.number().min(0).max(2).default(CREATOR_OUTREACH_PROFILE.model.temperature),
+  OUTREACH_MAX_TURNS: positiveInteger(CREATOR_OUTREACH_PROFILE.runtime.maxTurns),
+  OUTREACH_TIMEOUT_MS: positiveInteger(CREATOR_OUTREACH_PROFILE.runtime.timeoutMs),
   MODEL_WHITELIST: optionalString,
 
   LANGFUSE_ENABLED: booleanString(false),
@@ -68,7 +71,7 @@ const environmentSchema = z.object({
   OPS_MCP_TIMEOUT_MS: positiveInteger(120_000),
   OPS_MCP_MAX_RESPONSE_BYTES: positiveInteger(2 * 1024 * 1024),
   PUBLIC_DIR: z.string().trim().min(1).default("./public"),
-  SYSTEM_PROMPT_FILE: z.string().trim().min(1).default("./config/system-prompt.md"),
+  AGENT_PROMPTS_DIR: z.string().trim().min(1).default("./config/agent-profiles"),
   SEGMENTS_FILE: z.string().trim().min(1).default("./config/user-segments.json"),
   SCHEDULED_TASKS_FILE: z.string().trim().min(1).default("./config/scheduled-tasks.json"),
 }).superRefine((env, ctx) => {
@@ -88,16 +91,7 @@ const environmentSchema = z.object({
   }
 });
 
-export type AgentThinkingLevel = z.infer<typeof thinkingLevelSchema>;
-
-export interface AgentProfileConfig {
-  provider: string;
-  modelId: string;
-  thinkingLevel: AgentThinkingLevel;
-  temperature: number;
-  maxTurns: number;
-  timeoutMs: number;
-}
+export type { AgentThinkingLevel } from "./agent/profiles/types.js";
 
 export interface LangfuseConfig {
   enabled: boolean;
@@ -133,8 +127,10 @@ export interface AppConfig {
   interactiveSessionTimeoutMinutes: number;
   assistantDryRun: boolean;
   modelWhitelist: string[];
-  interactiveAgent: AgentProfileConfig;
-  outreachAgent: AgentProfileConfig;
+  agentProfiles: {
+    creatorChat: AgentProfileConfig;
+    creatorOutreach: AgentProfileConfig;
+  };
   langfuse: LangfuseConfig;
   loopitDataFile: string;
   skillsDir: string;
@@ -145,7 +141,7 @@ export interface AppConfig {
     maxResponseBytes: number;
   };
   publicDir: string;
-  systemPromptFile: string;
+  agentPromptsDir: string;
   segmentsFile: string;
   scheduledTasksFile: string;
 }
@@ -214,8 +210,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   if (authMode === "jwt" && env.API_JWT_SECRET && env.API_JWT_SECRET.length < 32) {
     throw new ConfigError(["API_JWT_SECRET must contain at least 32 characters"]);
   }
-  const outreachProvider = env.OUTREACH_MODEL_PROVIDER || env.ASSISTANT_MODEL_PROVIDER;
-  const outreachModelId = env.OUTREACH_MODEL_ID || env.ASSISTANT_MODEL_ID;
+  const outreachProvider = env.OUTREACH_MODEL_PROVIDER || CREATOR_OUTREACH_PROFILE.model.provider;
+  const outreachModelId = env.OUTREACH_MODEL_ID || CREATOR_OUTREACH_PROFILE.model.modelId;
   const interactiveModel = `${env.ASSISTANT_MODEL_PROVIDER}/${env.ASSISTANT_MODEL_ID}`;
   const outreachModel = `${outreachProvider}/${outreachModelId}`;
   const modelWhitelist = parseModelWhitelist(env.MODEL_WHITELIST, [
@@ -228,7 +224,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     throw new ConfigError(missingModels.map((model) => `MODEL_WHITELIST does not allow configured model ${model}`));
   }
 
-  if (environment === process.env) normalizeGoogleVertexEnv(env.ASSISTANT_MODEL_PROVIDER);
+  if (environment === process.env) {
+    normalizeGoogleVertexEnv(env.ASSISTANT_MODEL_PROVIDER);
+    if (outreachProvider !== env.ASSISTANT_MODEL_PROVIDER) normalizeGoogleVertexEnv(outreachProvider);
+  }
 
   return {
     nodeEnv: env.NODE_ENV,
@@ -255,21 +254,23 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     interactiveSessionTimeoutMinutes: env.INTERACTIVE_SESSION_TIMEOUT_MINUTES,
     assistantDryRun: env.ASSISTANT_DRY_RUN,
     modelWhitelist,
-    interactiveAgent: {
-      provider: env.ASSISTANT_MODEL_PROVIDER,
-      modelId: env.ASSISTANT_MODEL_ID,
-      thinkingLevel: env.ASSISTANT_THINKING_LEVEL,
-      temperature: env.ASSISTANT_TEMPERATURE,
-      maxTurns: env.ASSISTANT_MAX_TURNS,
-      timeoutMs: env.ASSISTANT_TIMEOUT_MS,
-    },
-    outreachAgent: {
-      provider: outreachProvider,
-      modelId: outreachModelId,
-      thinkingLevel: env.OUTREACH_THINKING_LEVEL,
-      temperature: env.OUTREACH_TEMPERATURE,
-      maxTurns: env.OUTREACH_MAX_TURNS,
-      timeoutMs: env.OUTREACH_TIMEOUT_MS,
+    agentProfiles: {
+      creatorChat: {
+        provider: env.ASSISTANT_MODEL_PROVIDER,
+        modelId: env.ASSISTANT_MODEL_ID,
+        thinkingLevel: env.ASSISTANT_THINKING_LEVEL,
+        temperature: env.ASSISTANT_TEMPERATURE,
+        maxTurns: env.ASSISTANT_MAX_TURNS,
+        timeoutMs: env.ASSISTANT_TIMEOUT_MS,
+      },
+      creatorOutreach: {
+        provider: outreachProvider,
+        modelId: outreachModelId,
+        thinkingLevel: env.OUTREACH_THINKING_LEVEL,
+        temperature: env.OUTREACH_TEMPERATURE,
+        maxTurns: env.OUTREACH_MAX_TURNS,
+        timeoutMs: env.OUTREACH_TIMEOUT_MS,
+      },
     },
     langfuse: {
       enabled: env.LANGFUSE_ENABLED,
@@ -288,7 +289,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
       maxResponseBytes: env.OPS_MCP_MAX_RESPONSE_BYTES,
     },
     publicDir: resolve(env.PUBLIC_DIR),
-    systemPromptFile: resolve(env.SYSTEM_PROMPT_FILE),
+    agentPromptsDir: resolve(env.AGENT_PROMPTS_DIR),
     segmentsFile: resolve(env.SEGMENTS_FILE),
     scheduledTasksFile: resolve(env.SCHEDULED_TASKS_FILE),
   };

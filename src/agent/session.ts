@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import {
@@ -17,12 +18,7 @@ import { createAgentRunTrace, type AgentRunTrace } from "../observability/langfu
 import type { Observability } from "../observability/index.js";
 import { createModelParametersExtension, createTurnLimitExtension } from "./extensions.js";
 import { OpsModelRegistry } from "./models.js";
-import type { AgentProfile } from "./profiles.js";
-
-const DEFAULT_SYSTEM_PROMPT = `你是 Loopit 的创作小助手，帮创作者了解自己的作品、读懂玩家、把作品做得更好。
-温暖、简洁、会打气，说“你的作品”。只用工具查到的真实数据与后台知识库说话，不编数字、不杜撰活动。
-聊创作技巧或 Loopit 能力时调 read_knowledge('creator_guide')，聊活动时调 read_knowledge('ops_activities')。
-做主动触达只写一条简短 IM；不值得打扰就回 NO_OUTREACH: <原因>。`;
+import type { AgentProfile } from "./profiles/types.js";
 
 export interface OpsSessionHandle {
   session: AgentSession;
@@ -56,10 +52,12 @@ export class OpsSessionFactory {
 
     const models = await this.models();
     const model = models.resolve(profile.provider, profile.modelId);
-    const trace = createAgentRunTrace(this.observability, profile, input);
+    const systemPrompt = await this.systemPrompt(profile);
+    const promptHash = createHash("sha256").update(systemPrompt).digest("hex").slice(0, 16);
+    const trace = createAgentRunTrace(this.observability, profile, input, promptHash);
     const settingsManager = SettingsManager.inMemory({
       compaction: { enabled: profile.compactionEnabled },
-      retry: { enabled: true, maxRetries: 2 },
+      retry: { enabled: profile.maxRetries > 0, maxRetries: profile.maxRetries },
     });
     const resourceLoader = new DefaultResourceLoader({
       cwd: input.workDir,
@@ -76,7 +74,7 @@ export class OpsSessionFactory {
         { name: "turn-limit", factory: createTurnLimitExtension(profile) },
         ...(trace ? [{ name: "langfuse", factory: trace.extension }] : []),
       ],
-      systemPrompt: await this.systemPrompt(),
+      systemPrompt,
     });
     await resourceLoader.reload();
 
@@ -115,10 +113,9 @@ export class OpsSessionFactory {
     });
   }
 
-  private async systemPrompt(): Promise<string> {
-    const base = await readFile(this.config.systemPromptFile, "utf8")
-      .then((value) => value.trim() || DEFAULT_SYSTEM_PROMPT)
-      .catch(() => DEFAULT_SYSTEM_PROMPT);
+  private async systemPrompt(profile: AgentProfile): Promise<string> {
+    const base = (await readFile(profile.systemPromptFile, "utf8")).trim();
+    if (!base) throw new Error(`Agent Profile ${profile.id} has an empty system prompt: ${profile.systemPromptFile}`);
     const index = await knowledgeIndex(this.config.skillsDir).catch(() => "");
     return index ? `${base}\n\n${index}` : base;
   }

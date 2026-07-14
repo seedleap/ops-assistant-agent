@@ -248,6 +248,10 @@
 
     <div class="panel" id="panel-prompt">
       <div class="cfg-head">System Prompt <span>改完点保存，下次对话即生效</span></div>
+      <label class="field"><span class="lbl">Agent Profile</span><select id="promptProfile">
+        <option value="creator-chat">Creator Chat</option>
+        <option value="creator-outreach">Creator Outreach</option>
+      </select></label>
       <textarea class="cfg-editor" id="promptEditor" placeholder="加载中…"></textarea>
       <div class="cfg-actions"><button id="promptSave">保存</button><span class="cfg-status" id="promptStatus"></span></div>
     </div>
@@ -696,19 +700,21 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
 /* ---------- System Prompt 编辑 ---------- */
 const $promptEditor = document.getElementById("promptEditor");
 const $promptStatus = document.getElementById("promptStatus");
+const $promptProfile = document.getElementById("promptProfile");
 let promptLoaded = false;
 async function loadPrompt(force){
   if (promptLoaded && !force) return;
   try {
-    const r = await fetch(API + "/config/system-prompt");
+    const r = await fetch(API + "/config/agent-profiles/" + encodeURIComponent($promptProfile.value) + "/system-prompt");
     const d = await r.json();
     $promptEditor.value = d.content || "";
     promptLoaded = true;
   } catch (e){ $promptEditor.value = ""; cfgStatus($promptStatus, "加载失败：" + e.message, true); }
 }
+$promptProfile.addEventListener("change", () => { promptLoaded = false; loadPrompt(true); });
 document.getElementById("promptSave").addEventListener("click", async () => {
   try {
-    const r = await fetch(API + "/config/system-prompt", {
+    const r = await fetch(API + "/config/agent-profiles/" + encodeURIComponent($promptProfile.value) + "/system-prompt", {
       method: "PUT", headers: { "content-type": "application/json" },
       body: JSON.stringify({ content: $promptEditor.value })
     });

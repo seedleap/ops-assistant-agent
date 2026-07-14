@@ -11,6 +11,8 @@ import type { AppConfig } from "./config.js";
 import { queryLoopitData } from "./loopitDataGateway.js";
 import type { OpsAssistant } from "./agent/assistant.js";
 import { MODEL_OPTIONS } from "./agent/models.js";
+import { listAgentProfiles, resolveAgentProfileById } from "./agent/profiles/registry.js";
+import type { AgentProfileId } from "./agent/profiles/types.js";
 import type { OutreachScheduler } from "./scheduler.js";
 import { createId, DEFAULT_THREAD_ID, JsonStore } from "./store.js";
 import { createAuthentication } from "./http/security.js";
@@ -104,29 +106,89 @@ app.get("/im/messages", (req, res) => {
 // ---- 可选模型列表（前端下拉用，对比价格/效果） ----
 app.get("/config/models", (_req, res) => {
   const models = MODEL_OPTIONS.filter((model) => config.modelWhitelist.includes(`${model.provider}/${model.id}`));
-  res.json({ models, default: config.interactiveAgent.modelId });
+  res.json({ models, default: config.agentProfiles.creatorChat.modelId });
 });
 
-// ---- 系统提示：前端可编辑，运行时读取，下次对话生效 ----
-app.get("/config/system-prompt", async (_req, res, next) => {
+const profileIdSchema = z.enum(["creator-chat", "creator-outreach"]);
+const contentSchema = z.object({ content: z.string().trim().min(1).max(100_000) });
+
+function profilePromptFile(id: AgentProfileId): string {
+  return resolveAgentProfileById(config, id).systemPromptFile;
+}
+
+async function sendSystemPrompt(id: AgentProfileId, res: express.Response, next: express.NextFunction): Promise<void> {
   try {
-    const content = await readFile(config.systemPromptFile, "utf8").catch(() => "");
-    res.json({ content });
+    const content = await readFile(profilePromptFile(id), "utf8").catch(() => "");
+    res.json({ profileId: id, content });
   } catch (err) {
     next(err);
   }
-});
+}
 
-const contentSchema = z.object({ content: z.string() });
-app.put("/config/system-prompt", async (req, res, next) => {
+async function saveSystemPrompt(
+  id: AgentProfileId,
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+): Promise<void> {
   try {
     const { content } = contentSchema.parse(req.body);
-    await mkdir(dirname(config.systemPromptFile), { recursive: true });
-    await writeFile(config.systemPromptFile, content, "utf8");
-    res.json({ ok: true });
+    const file = profilePromptFile(id);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, content, "utf8");
+    res.json({ ok: true, profileId: id });
   } catch (err) {
     next(err);
   }
+}
+
+app.get("/config/agent-profiles", (_req, res) => {
+  const profiles = listAgentProfiles(config).map((profile) => ({
+    id: profile.id,
+    runType: profile.runType,
+    traceName: profile.traceName,
+    promptVersion: profile.promptVersion,
+    model: {
+      provider: profile.provider,
+      modelId: profile.modelId,
+      thinkingLevel: profile.thinkingLevel,
+      temperature: profile.temperature,
+    },
+    runtime: {
+      maxTurns: profile.maxTurns,
+      timeoutMs: profile.timeoutMs,
+      maxRetries: profile.maxRetries,
+      compactionEnabled: profile.compactionEnabled,
+    },
+    toolNames: profile.toolNames,
+  }));
+  res.json({ profiles });
+});
+
+app.get("/config/agent-profiles/:id/system-prompt", (req, res, next) => {
+  const parsed = profileIdSchema.safeParse(req.params.id);
+  if (!parsed.success) {
+    res.status(404).json({ error: "unknown agent profile" });
+    return;
+  }
+  void sendSystemPrompt(parsed.data, res, next);
+});
+
+app.put("/config/agent-profiles/:id/system-prompt", (req, res, next) => {
+  const parsed = profileIdSchema.safeParse(req.params.id);
+  if (!parsed.success) {
+    res.status(404).json({ error: "unknown agent profile" });
+    return;
+  }
+  void saveSystemPrompt(parsed.data, req, res, next);
+});
+
+// Creator chat alias retained for the current lightweight configuration UI.
+app.get("/config/system-prompt", (_req, res, next) => {
+  void sendSystemPrompt("creator-chat", res, next);
+});
+app.put("/config/system-prompt", (req, res, next) => {
+  void saveSystemPrompt("creator-chat", req, res, next);
 });
 
 // ---- 知识库（创作者指导 / 运营活动）子文档增删改查 ----

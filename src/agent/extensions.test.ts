@@ -8,19 +8,23 @@ import {
   type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
 import { createModelParametersExtension } from "./extensions.js";
-import type { AgentProfile } from "./profiles.js";
+import type { AgentProfile } from "./profiles/types.js";
 
 const PROFILE: AgentProfile = {
   id: "creator-chat",
   traceName: "ops-creator-chat",
+  promptVersion: "creator-growth-v1",
   provider: "google-vertex",
   modelId: "gemini-3-flash-preview",
   thinkingLevel: "low",
   temperature: 0.3,
   maxTurns: 10,
   timeoutMs: 120_000,
+  maxRetries: 2,
   toolNames: ["query_work_overview"],
   compactionEnabled: true,
+  runType: "interactive",
+  systemPromptFile: "/tmp/creator-chat.md",
 };
 
 test("model parameters extension patches Vertex payload without enabling thoughts", () => {

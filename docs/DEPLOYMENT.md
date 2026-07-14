@@ -39,7 +39,8 @@ Persistent paths include:
 
 - `/app/data/state.json`;
 - Pi sessions and workspaces;
-- `/app/data/config` for system prompt, segments and scheduled-task config;
+- `/app/data/config/agent-profiles` for per-Profile system prompts;
+- `/app/data/config` for segments and scheduled-task config;
 - `/app/data/skills` for managed knowledge;
 - runtime auth/cache files.
 

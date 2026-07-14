@@ -41,7 +41,11 @@ src/
 │   ├── events.ts        # Pi events mapped to the HTTP stream contract
 │   ├── extensions.ts    # provider parameters and max-turn guard
 │   ├── models.ts        # AuthStorage, ModelRegistry and model whitelist
-│   ├── profiles.ts      # interactive/outreach model and tool policies
+│   ├── profiles/        # one typed composition root per Agent
+│   │   ├── creator-chat.ts
+│   │   ├── creator-outreach.ts
+│   │   ├── registry.ts
+│   │   └── types.ts
 │   └── session.ts       # the only createAgentSession call site
 ├── observability/
 │   ├── index.ts         # OTel/Langfuse initialization and shutdown
@@ -64,14 +68,21 @@ There are two profiles:
 
 Each profile controls:
 
+- its own system-prompt file;
 - exact provider and model ID;
 - thinking level and temperature;
 - maximum turns and wall-clock timeout;
+- retry policy;
 - tool allowlist;
 - compaction policy;
 - stable Langfuse trace name.
 
 Production model selection is constrained by `MODEL_WHITELIST`. Unknown or disallowed models fail explicitly instead of silently falling back, so model experiments remain attributable.
+
+Profile TypeScript files own versioned behavior and defaults. Environment variables
+may override deploy-time model parameters, but credentials, MCP endpoints, JWT,
+storage and Langfuse remain infrastructure configuration. `OpsSessionFactory` only
+translates a resolved Profile into Pi services and `createAgentSession()` options.
 
 ## Pi integration
 
@@ -103,7 +114,7 @@ One Agent run maps to one trace:
 - trace name: profile `traceName`;
 - trace user: internal user ID;
 - trace session: IM thread ID;
-- trace metadata: run type, model/provider, thinking level, temperature and max turns;
+- trace metadata: run type, semantic prompt version, exact prompt hash, model/provider, thinking level, temperature and max turns;
 - generation observations: model output, token usage and cost per turn;
 - tool observations: sanitized args/output and error status;
 - final trace: output, total usage, cost and tool-call count.

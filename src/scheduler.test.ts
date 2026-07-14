@@ -29,21 +29,23 @@ function testConfig(dataDir: string): AppConfig {
     interactiveSessionTimeoutMinutes: 60,
     assistantDryRun: true,
     modelWhitelist: ["google-vertex/gemini-3-flash-preview"],
-    interactiveAgent: {
-      provider: "google-vertex",
-      modelId: "gemini-3-flash-preview",
-      thinkingLevel: "low",
-      temperature: 0.3,
-      maxTurns: 10,
-      timeoutMs: 120_000,
-    },
-    outreachAgent: {
-      provider: "google-vertex",
-      modelId: "gemini-3-flash-preview",
-      thinkingLevel: "off",
-      temperature: 0.2,
-      maxTurns: 6,
-      timeoutMs: 90_000,
+    agentProfiles: {
+      creatorChat: {
+        provider: "google-vertex",
+        modelId: "gemini-3-flash-preview",
+        thinkingLevel: "low",
+        temperature: 0.3,
+        maxTurns: 10,
+        timeoutMs: 120_000,
+      },
+      creatorOutreach: {
+        provider: "google-vertex",
+        modelId: "gemini-3-flash-preview",
+        thinkingLevel: "off",
+        temperature: 0.2,
+        maxTurns: 6,
+        timeoutMs: 90_000,
+      },
     },
     langfuse: {
       enabled: false,
@@ -56,7 +58,7 @@ function testConfig(dataDir: string): AppConfig {
       maxResponseBytes: 2 * 1024 * 1024,
     },
     publicDir: join(process.cwd(), "public"),
-    systemPromptFile: join(process.cwd(), "config", "system-prompt.md"),
+    agentPromptsDir: join(process.cwd(), "config", "agent-profiles"),
     segmentsFile: join(process.cwd(), "config", "user-segments.json"),
     scheduledTasksFile: join(process.cwd(), "config", "scheduled-tasks.json"),
   };
