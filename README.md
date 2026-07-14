@@ -21,34 +21,30 @@
 
 ```text
 智能体查询工具
-  -> scripts/ops_query.py
-  -> 只读 SQL 网关（由部署环境配置）
-  -> 数据仓库
+  -> 官方 MCP Client（Streamable HTTP）
+  -> Loopit 数据 MCP 服务
+  -> 外部业务 API / 数据服务
 ```
 
-`scripts/ops_query.py` 是数据查询入口。它只做两件事：
+本项目不生成 SQL，也不持有数据仓库口径。远端 MCP 服务提供以下六个只读业务工具：
 
-- 按固定口径生成只读 SQL。
-- 调用当前项目配置的 SQL 网关，把结果整理成适合智能体理解的 JSON。
+- `query_creator_works`
+- `query_work_profile`
+- `query_work_consumption`
+- `query_work_comments`
+- `query_work_prompt`
+- `query_work_overview`
 
-项目本身不依赖任何本机其他项目。部署时在 `.env` 里配置其中一种网关即可：
+部署时配置远程 Streamable HTTP endpoint：
 
 ```bash
-# 方式一：HTTP 网关
-OPS_SQL_GATEWAY_URL=https://your-sql-gateway.example.com/query
-OPS_SQL_GATEWAY_TOKEN=
-
-# 方式二：命令行网关
-OPS_SQL_GATEWAY_CMD=
+OPS_MCP_URL=https://ops-data.example.com/mcp
+OPS_MCP_TOKEN=<service-token>
+OPS_MCP_TIMEOUT_MS=120000
+OPS_MCP_MAX_RESPONSE_BYTES=2097152
 ```
 
-HTTP 网关接收 JSON：
-
-```json
-{"sql":"SELECT ...", "timeoutMs":120000}
-```
-
-命令行网关从标准输入读取同样的 JSON，并向标准输出写出查询结果 JSON。
+Agent 只允许调用这六个固定名称，不会动态接受远端新增工具。首次查询时执行 MCP 初始化与工具清单校验，服务进程关闭时主动关闭连接。
 
 当前覆盖的数据包括：
 
@@ -59,9 +55,18 @@ HTTP 网关接收 JSON：
 
 所有业务日期按北京时间，也就是 UTC+8。
 
+## Agent 运行与观测
+
+项目使用最新版 `@earendil-works/pi-coding-agent` 管理模型、会话、重试、Compaction 和工具生命周期。交互对话与主动触达分别使用独立的 Agent Profile，可配置模型、thinking level、temperature、最大轮次和超时。
+
+配置 Langfuse 后，每次运行会生成 Agent → turn → tool 的分层 trace，并记录模型参数、工具状态、Token、费用和最终结果。Langfuse 未配置或不可用时不会阻塞 Agent 主流程。
+
+详细技术结构见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。活动运营中台、数据系统、Agent 与客户端之间的职责和事实边界见 [`docs/CREATOR-OPERATIONS-CONTEXT.md`](docs/CREATOR-OPERATIONS-CONTEXT.md)。
+
 ## 本地启动
 
 ```bash
+corepack enable
 pnpm install
 cp .env.example .env
 pnpm dev
@@ -103,15 +108,43 @@ config/google-credentials.json
 需要本机具备：
 
 - Node.js 和 pnpm。
-- Python 3。
 - Gemini 凭据，或设置 `ASSISTANT_DRY_RUN=true`。
-- 可用的只读 SQL 网关，或设置 `ASSISTANT_DRY_RUN=true` 只验证本地链路。
+- 可用的 Loopit 数据 MCP 服务，或设置 `ASSISTANT_DRY_RUN=true` 只验证本地链路。
 
 可以先用 dry-run 启动，确认项目自身可以独立运行：
 
 ```bash
-ASSISTANT_DRY_RUN=true pnpm dev
+ASSISTANT_DRY_RUN=true pnpm run dev:once
 ```
+
+环境变量会在进程启动时统一校验。端口、布尔值、模型参数、模型白名单或 Langfuse 凭据配置错误时，服务会直接给出具体配置项并退出，不会静默使用默认值。
+
+`CORS_ORIGINS=*` 便于本地预览；部署到线上时应改为逗号分隔的管理端来源，例如 `https://ops.loopit.example`。
+
+生产环境默认要求 HS256 JWT。通过 `API_JWT_SECRET` 配置后台与 Agent 服务共享的签名密钥，也可以用 `API_JWT_ISSUER`、`API_JWT_AUDIENCE` 进一步约束签发方和受众。`/health` 与静态页面保持公开，其余接口需要 `Authorization: Bearer <jwt>`。
+
+## 构建与生产运行
+
+项目要求 Node.js 22.19 及以上、pnpm 10。`packageManager` 字段固定了 pnpm 版本，CI 和本地统一使用 Corepack。
+
+```bash
+corepack enable
+pnpm install --frozen-lockfile
+pnpm run check
+pnpm start
+```
+
+`pnpm run check` 会依次执行类型检查、测试和生产构建。生产代码输出到 `dist/`，测试文件不会进入构建产物。
+
+容器构建：
+
+```bash
+docker build --build-arg VCS_REF="$(git rev-parse HEAD)" -t ops-assistant-agent .
+```
+
+线上单机使用 `compose.production.yaml`，Kubernetes 使用 `deploy/k8s/production`。`.env.production` 应设置 `NODE_ENV=production`、`API_AUTH_MODE=jwt` 和强随机 `API_JWT_SECRET`。生产默认关闭内置调试页面，服务应放在内部鉴权网关之后。
+
+完整的镜像构建、Secret 注入、持久卷和 Kustomize 发布说明见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
 
 ## 常用接口
 
@@ -163,21 +196,6 @@ curl http://localhost:8010/outbox
 curl -X POST http://localhost:8010/outbox/<messageId>/deliver
 ```
 
-## 直接查数据
-
-配置好 SQL 网关后，也可以不启动服务，直接用命令行查真实数据：
-
-```bash
-./bin/ops-query overview --pid <PID> --days 7 --pretty
-./bin/ops-query consumption --pid <PID> --days 7
-./bin/ops-query consumption --pid <PID> --start 20260601 --end 20260607
-./bin/ops-query comments --pid <PID> --sort hot --limit 100
-./bin/ops-query comments --pid <PID> --sort latest --limit 100
-./bin/ops-query prompt --pid <PID> --rounds 5
-./bin/ops-query profile --pid <PID>
-./bin/ops-query works --uid <UID> --limit 20 --public
-```
-
 智能体内部会使用这些查询工具：
 
 - `query_work_overview`：查作品全貌。
@@ -188,11 +206,12 @@ curl -X POST http://localhost:8010/outbox/<messageId>/deliver
 - `query_creator_works`：查某个创作者的作品列表。
 - `read_knowledge`：读取运营知识库。
 
-具体什么时候用哪个工具，写在 [`skills/ops-assistant/SKILL.md`](skills/ops-assistant/SKILL.md)。
+每个 Agent 的模型默认值、工具白名单、语义化提示词版本和运行策略由 `src/agent/profiles/` 下的独立 Profile 声明；回复约束分别写在 `config/agent-profiles/`，运行时不会隐式加载其他 skill 指令。Langfuse trace 同时记录 Profile 的提示词版本与最终系统提示词哈希，便于区分运营热更新后的实际行为。
 
 ## 配置文件
 
-- `config/system-prompt.md`：智能体的系统提示词，可以通过页面或接口修改。
+- `config/agent-profiles/creator-chat.md`：创作者对话 Profile 的系统提示词。
+- `config/agent-profiles/creator-outreach.md`：主动触达 Profile 的系统提示词。
 - `config/user-segments.json`：用户分层配置。
 - `config/scheduled-tasks.json`：定时触达任务配置。
 - `skills/creator-guide/`：创作指导知识库。
@@ -202,23 +221,27 @@ curl -X POST http://localhost:8010/outbox/<messageId>/deliver
 
 ```text
 bin/                    命令行入口
-config/                 系统提示、用户分层、定时任务配置
+config/agent-profiles/  各 Agent Profile 的可运营系统提示
+config/                 用户分层、定时任务配置
 public/                 本地聊天调试页面
 sample-data/            本地调试数据
-scripts/ops_query.py    真实 Loopit 数据查询入口
 skills/                 智能体可读取的运营知识库
-src/                    服务、智能体、调度器、工具定义
+src/                    服务、智能体、MCP client、调度器、工具定义
 ```
 
-`POST /data/query` 会读取 `sample-data/*.json`，用于本地离线调试。智能体正式查数据时走 `scripts/ops_query.py`。
+`POST /data/query` 会读取 `sample-data/*.json`，仅用于本地离线调试。智能体正式查数据时只走远程 MCP。
 
 ## 开发命令
 
 ```bash
-pnpm run typecheck
-pnpm test
-pnpm run query -- overview --pid <PID> --days 7 --pretty
+pnpm run check
+pnpm run dev:once
 ```
+
+- `pnpm dev`：监听源码变化并自动重启。
+- `pnpm run dev:once`：启动一次，适合脚本和冒烟测试。
+- `pnpm run build`：生成可部署的 `dist/`。
+- `pnpm start`：运行已经构建的生产代码。
 
 ## 接入到真实私信系统
 

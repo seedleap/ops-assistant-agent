@@ -2,7 +2,8 @@ import { join } from "node:path";
 import type { AppConfig } from "./config.js";
 import { createId, JsonStore } from "./store.js";
 import type { ConversationRecord, OutboxMessage, ScheduleRecord } from "./types.js";
-import { PiAssistant } from "./piAssistant.js";
+import { OpsAssistant } from "./agent/assistant.js";
+import type { Logger } from "pino";
 
 function addMinutes(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60_000);
@@ -40,14 +41,15 @@ export class OutreachScheduler {
   constructor(
     private readonly config: AppConfig,
     private readonly store: JsonStore,
-    private readonly assistant: PiAssistant,
+    private readonly assistant: OpsAssistant,
+    private readonly logger: Logger,
   ) {}
 
   start(): void {
     if (this.timer) return;
     this.timer = setInterval(() => {
-      this.tick().catch((err) => {
-        console.error("[scheduler] tick failed", err);
+      this.tick().catch((error) => {
+        this.logger.error({ err: error }, "scheduler tick failed");
       });
     }, this.config.schedulerPollMs);
     this.timer.unref?.();

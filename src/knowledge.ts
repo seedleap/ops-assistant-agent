@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Type } from "@sinclair/typebox";
-import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 
 /**
  * 知识库 = 由后台配置、agent 可读的若干 md 文档集合。
@@ -136,15 +136,25 @@ export function createReadKnowledgeTool(skillsDir: string): ToolDefinition {
       if (typeof collection !== "string" || !isCollection(collection)) {
         return {
           content: [{ type: "text", text: `未知知识库：${String(collection)}` }],
-          details: { ok: false },
+          details: { ok: false, error: `unknown knowledge collection: ${String(collection)}` },
           isError: true,
         };
       }
-      const text = await readAllConcat(skillsDir, collection);
-      return {
-        content: [{ type: "text", text: text || "（该知识库暂无文档）" }],
-        details: { ok: true, collection },
-      };
+      const startedAt = Date.now();
+      try {
+        const text = await readAllConcat(skillsDir, collection);
+        return {
+          content: [{ type: "text", text: text || "（该知识库暂无文档）" }],
+          details: { ok: true, collection, durationMs: Date.now() - startedAt },
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: "text", text: `知识库读取失败：${message}` }],
+          details: { ok: false, collection, durationMs: Date.now() - startedAt, error: message },
+          isError: true,
+        };
+      }
     },
   };
 }

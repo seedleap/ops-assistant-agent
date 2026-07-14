@@ -1,0 +1,191 @@
+import {
+  LangfuseOtelSpanAttributes,
+  startObservation,
+  type LangfuseAgent,
+  type LangfuseGeneration,
+  type LangfuseTool,
+} from "@langfuse/tracing";
+import type {
+  ExtensionFactory,
+  SessionStats,
+} from "@earendil-works/pi-coding-agent";
+import type { AgentProfile } from "../agent/profiles/types.js";
+import type { AssistantRunInput } from "../types.js";
+import type { Observability } from "./index.js";
+import { errorMessage, sanitizeTraceValue } from "./sanitize.js";
+
+interface AssistantMessageLike {
+  role?: string;
+  content?: Array<{ type?: string; text?: unknown }>;
+  model?: string;
+  stopReason?: string;
+  errorMessage?: unknown;
+  usage?: {
+    input?: number;
+    output?: number;
+    cacheRead?: number;
+    cacheWrite?: number;
+    totalTokens?: number;
+    cost?: { total?: number };
+  };
+}
+
+function assistantText(message: AssistantMessageLike | undefined): string {
+  if (!message || !Array.isArray(message.content)) return "";
+  return message.content
+    .filter((part) => part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text as string)
+    .join("")
+    .trim();
+}
+
+function toolOutput(result: unknown): unknown {
+  const payload = result as { content?: Array<{ type?: string; text?: unknown }> } | undefined;
+  if (!Array.isArray(payload?.content)) return sanitizeTraceValue(result);
+  return sanitizeTraceValue(payload.content
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join("\n"));
+}
+
+export interface AgentRunTrace {
+  extension: ExtensionFactory;
+  finish(output: string, stats?: SessionStats, error?: unknown): Promise<void>;
+  addTags(tags: string[]): void;
+}
+
+export function createAgentRunTrace(
+  observability: Observability,
+  profile: AgentProfile,
+  input: AssistantRunInput,
+  promptHash: string,
+): AgentRunTrace | undefined {
+  if (!observability.enabled) return undefined;
+
+  const tags = new Set<string>([
+    input.type,
+    profile.id,
+    profile.modelId,
+    `prompt:${profile.promptVersion}`,
+    `prompt-sha256:${promptHash}`,
+  ]);
+  const root = startObservation(profile.traceName, {
+    input: sanitizeTraceValue(input.prompt),
+    metadata: {
+      runId: input.runId,
+      runType: input.type,
+      promptVersion: profile.promptVersion,
+      promptHash,
+      modelProvider: profile.provider,
+      modelId: profile.modelId,
+      thinkingLevel: profile.thinkingLevel,
+      temperature: profile.temperature,
+      maxTurns: profile.maxTurns,
+    },
+  }, { asType: "agent" });
+  root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_NAME, profile.traceName);
+  root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_USER_ID, input.userId);
+  root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_SESSION_ID, input.imThreadId);
+  root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [...tags]);
+
+  let currentTurn: LangfuseGeneration | undefined;
+  const toolSpans = new Map<string, LangfuseTool>();
+
+  const extension: ExtensionFactory = (pi) => {
+    pi.on("turn_start", (event) => {
+      currentTurn?.end();
+      currentTurn = root.startObservation(`turn-${event.turnIndex + 1}`, {
+        model: profile.modelId,
+        modelParameters: {
+          temperature: profile.temperature,
+          thinkingLevel: profile.thinkingLevel,
+        },
+      }, { asType: "generation" });
+    });
+
+    pi.on("turn_end", (event) => {
+      const message = event.message as AssistantMessageLike;
+      if (!currentTurn) return;
+      const usage = message.usage;
+      currentTurn.update({
+        output: sanitizeTraceValue(assistantText(message)),
+        model: message.model || profile.modelId,
+        ...(usage ? {
+          usageDetails: {
+            input: Number(usage.input || 0),
+            output: Number(usage.output || 0),
+            cacheRead: Number(usage.cacheRead || 0),
+            cacheWrite: Number(usage.cacheWrite || 0),
+            total: Number(usage.totalTokens || 0),
+          },
+          costDetails: { total: Number(usage.cost?.total || 0) },
+        } : {}),
+        ...(message.stopReason === "error" || message.stopReason === "aborted"
+          ? { level: "ERROR", statusMessage: errorMessage(message.errorMessage || message.stopReason) }
+          : {}),
+      });
+      currentTurn.end();
+      currentTurn = undefined;
+    });
+
+    pi.on("tool_execution_start", (event) => {
+      const parent = currentTurn || root;
+      toolSpans.set(event.toolCallId, parent.startObservation(event.toolName, {
+        input: sanitizeTraceValue(event.args),
+      }, { asType: "tool" }));
+    });
+
+    pi.on("tool_execution_end", (event) => {
+      const span = toolSpans.get(event.toolCallId);
+      if (!span) return;
+      const details = event.result?.details as { error?: unknown } | undefined;
+      span.update({
+        output: toolOutput(event.result),
+        ...(event.isError || event.result?.isError
+          ? {
+              level: "ERROR",
+              statusMessage: errorMessage(details?.error || toolOutput(event.result) || "tool execution error"),
+            }
+          : {}),
+      });
+      span.end();
+      toolSpans.delete(event.toolCallId);
+    });
+  };
+
+  return {
+    extension,
+    addTags(nextTags) {
+      nextTags.filter(Boolean).forEach((tag) => tags.add(tag));
+      root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [...tags]);
+    },
+    async finish(output, stats, error) {
+      currentTurn?.end();
+      for (const span of toolSpans.values()) span.end();
+      toolSpans.clear();
+      if (error) tags.add("failed");
+      else if (/^NO_OUTREACH:/i.test(output.trim())) tags.add("no-outreach");
+      else tags.add("success");
+      root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [...tags]);
+      root.update({
+        output: sanitizeTraceValue(output),
+        metadata: {
+          promptVersion: profile.promptVersion,
+          promptHash,
+          ...(stats ? {
+            inputTokens: stats.tokens.input,
+            outputTokens: stats.tokens.output,
+            cacheReadTokens: stats.tokens.cacheRead,
+            cacheWriteTokens: stats.tokens.cacheWrite,
+            totalTokens: stats.tokens.total,
+            costUsd: stats.cost,
+            toolCalls: stats.toolCalls,
+          } : {}),
+          ...(error ? { error: errorMessage(error) } : {}),
+        },
+        ...(error ? { level: "ERROR", statusMessage: errorMessage(error) } : {}),
+      });
+      root.end();
+    },
+  };
+}
