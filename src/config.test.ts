@@ -9,6 +9,8 @@ test("loadConfig parses explicit runtime values", () => {
     HOST: "127.0.0.1",
     PORT: "9010",
     CORS_ORIGINS: "https://ops.loopit.example,https://admin.loopit.example",
+    TRUST_PROXY_HOPS: "1",
+    STATIC_UI_ENABLED: "false",
     SCHEDULER_ENABLED: "false",
     ASSISTANT_DRY_RUN: "true",
     ASSISTANT_MODEL_PROVIDER: "google-vertex",
@@ -20,6 +22,8 @@ test("loadConfig parses explicit runtime values", () => {
   assert.equal(config.host, "127.0.0.1");
   assert.equal(config.port, 9_010);
   assert.deepEqual(config.corsOrigins, ["https://ops.loopit.example", "https://admin.loopit.example"]);
+  assert.equal(config.trustProxyHops, 1);
+  assert.equal(config.staticUiEnabled, false);
   assert.equal(config.schedulerEnabled, false);
   assert.equal(config.assistantDryRun, true);
   assert.equal(config.interactiveAgent.temperature, 0.4);

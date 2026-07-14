@@ -23,6 +23,8 @@ test("health is public while API routes require a valid JWT", async () => {
       ASSISTANT_DRY_RUN: "true",
       API_AUTH_MODE: "jwt",
       API_JWT_SECRET: jwtSecret,
+      CORS_ORIGINS: "https://ops.loopit.example",
+      STATIC_UI_ENABLED: "false",
       DATA_DIR: dataDir,
     });
     const store = await JsonStore.open(config.dataDir);
@@ -31,7 +33,17 @@ test("health is public while API routes require a valid JWT", async () => {
     const app = createApp({ config, store, assistant, scheduler, logger });
 
     await request(app).get("/health").expect(200, { ok: true });
+    await request(app).get("/").expect(401, { error: "unauthorized" });
     await request(app).get("/state").expect(401, { error: "unauthorized" });
+
+    const preflight = await request(app)
+      .options("/state")
+      .set("Origin", "https://ops.loopit.example")
+      .set("Access-Control-Request-Method", "GET")
+      .set("Access-Control-Request-Headers", "Authorization,Content-Type")
+      .expect(204);
+    assert.equal(preflight.headers["access-control-allow-origin"], "https://ops.loopit.example");
+    assert.match(preflight.headers["access-control-allow-headers"], /Authorization/);
 
     const token = await new SignJWT({ scope: "ops-agent" })
       .setProtectedHeader({ alg: "HS256" })

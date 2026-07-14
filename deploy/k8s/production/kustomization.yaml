@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ops-assistant-agent-prod
+
+resources:
+  - namespace.yaml
+  - ../base
+
+images:
+  - name: ops-assistant-agent
+    newName: registry.example.invalid/ops-assistant-agent
+    newTag: replace-with-immutable-sha
+
+patches:
+  - path: configmap-patch.yaml

@@ -18,6 +18,8 @@ function testConfig(dataDir: string): AppConfig {
     host: "127.0.0.1",
     port: 0,
     corsOrigins: "*",
+    trustProxyHops: 0,
+    staticUiEnabled: true,
     auth: { mode: "none" },
     rateLimit: { windowMs: 60_000, max: 120 },
     dataDir,

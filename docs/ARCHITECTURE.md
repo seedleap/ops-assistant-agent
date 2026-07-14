@@ -148,3 +148,14 @@ The current `JsonStore`, local scheduler, configuration UI and outbox remain MVP
 - optional MCP adapter over stable Loopit business APIs.
 
 These infrastructure changes are independent from the Pi runtime refactor and should not be embedded into Agent prompts or tools.
+
+## Production topology
+
+The current production topology is deliberately one replica with a persistent
+volume. The image seeds default config and knowledge into that volume at startup,
+then treats the volume as the runtime source of truth. Kubernetes uses `Recreate`
+to prevent overlapping writers during rollout.
+
+This differs intentionally from Carmack's multi-replica/HPA topology. Scaling is
+allowed only after `JsonStore`, the local scheduler and outbox move behind shared
+durable services. See `docs/DEPLOYMENT.md` for the complete release contract.

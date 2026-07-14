@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ops-assistant-agent
+data:
+  NODE_ENV: production
+  LOG_LEVEL: info
+  HOST: 0.0.0.0
+  PORT: "8010"
+  DATA_DIR: /app/data
+  SKILLS_DIR: /app/data/skills
+  SYSTEM_PROMPT_FILE: /app/data/config/system-prompt.md
+  SEGMENTS_FILE: /app/data/config/user-segments.json
+  SCHEDULED_TASKS_FILE: /app/data/config/scheduled-tasks.json
+  API_AUTH_MODE: jwt
+  CORS_ORIGINS: https://replace-me.invalid
+  TRUST_PROXY_HOPS: "1"
+  STATIC_UI_ENABLED: "false"
+  RATE_LIMIT_WINDOW_MS: "60000"
+  RATE_LIMIT_MAX: "120"
+  SCHEDULER_ENABLED: "true"
+  SCHEDULER_POLL_MS: "60000"
+  ASSISTANT_DRY_RUN: "false"
+  LANGFUSE_ENABLED: "true"
+  LANGFUSE_TRACING_ENVIRONMENT: production
+  GOOGLE_CLOUD_LOCATION: global

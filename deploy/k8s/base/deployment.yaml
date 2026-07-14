@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ops-assistant-agent
+  labels:
+    app.kubernetes.io/name: ops-assistant-agent
+    app.kubernetes.io/component: agent-server
+spec:
+  # JsonStore and the local scheduler are intentionally single-process MVP
+  # components. Do not scale this Deployment above one replica.
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ops-assistant-agent
+      app.kubernetes.io/component: agent-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ops-assistant-agent
+        app.kubernetes.io/component: agent-server
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: ops-assistant-agent:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8010
+          envFrom:
+            - configMapRef:
+                name: ops-assistant-agent
+            - secretRef:
+                name: ops-assistant-agent-env
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/run/secrets/google/key.json
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
+            - name: google-credentials
+              mountPath: /var/run/secrets/google
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: ops-assistant-agent-data
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+        - name: google-credentials
+          secret:
+            secretName: ops-assistant-agent-google
+            # Secret volumes are root-owned; fsGroup 1000 needs group-read.
+            defaultMode: 0440

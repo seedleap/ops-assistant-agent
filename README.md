@@ -144,14 +144,12 @@ pnpm start
 容器构建：
 
 ```bash
-docker build -t ops-assistant-agent .
-docker run --rm -p 8010:8010 \
-  --env-file .env.production \
-  -v ops-assistant-data:/app/data \
-  ops-assistant-agent
+docker build --build-arg VCS_REF="$(git rev-parse HEAD)" -t ops-assistant-agent .
 ```
 
-`.env.production` 应设置 `NODE_ENV=production`、`API_AUTH_MODE=jwt` 和强随机 `API_JWT_SECRET`。镜像使用非 root 用户运行，包含只读数据查询脚本所需的 Python 3，并提供 `/health` 容器健康检查。凭据文件应通过 secret 或只读 volume 注入，不会复制进镜像。
+线上单机使用 `compose.production.yaml`，Kubernetes 使用 `deploy/k8s/production`。`.env.production` 应设置 `NODE_ENV=production`、`API_AUTH_MODE=jwt` 和强随机 `API_JWT_SECRET`。生产默认关闭内置调试页面，服务应放在内部鉴权网关之后。
+
+完整的镜像构建、Secret 注入、持久卷和 Kustomize 发布说明见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
 
 ## 常用接口
 

@@ -15,6 +15,7 @@ const booleanString = (fallback: boolean) => z.preprocess((value) => {
 }, z.boolean());
 const positiveNumber = (fallback: number) => z.coerce.number().positive().default(fallback);
 const positiveInteger = (fallback: number) => z.coerce.number().int().positive().default(fallback);
+const nonNegativeInteger = (fallback: number) => z.coerce.number().int().min(0).default(fallback);
 const nonNegativeNumber = (fallback: number) => z.coerce.number().min(0).default(fallback);
 
 const environmentSchema = z.object({
@@ -23,6 +24,8 @@ const environmentSchema = z.object({
   HOST: z.string().trim().min(1).default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65_535).default(8_010),
   CORS_ORIGINS: z.string().trim().min(1).default("*"),
+  TRUST_PROXY_HOPS: nonNegativeInteger(0),
+  STATIC_UI_ENABLED: booleanString(true),
   API_AUTH_MODE: z.enum(["none", "jwt"]).optional(),
   API_JWT_SECRET: optionalString,
   API_JWT_ISSUER: optionalString,
@@ -102,6 +105,8 @@ export interface AppConfig {
   host: string;
   port: number;
   corsOrigins: "*" | string[];
+  trustProxyHops: number;
+  staticUiEnabled: boolean;
   auth: {
     mode: "none" | "jwt";
     jwtSecret?: string;
@@ -218,6 +223,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     host: env.HOST,
     port: env.PORT,
     corsOrigins: parseCorsOrigins(env.CORS_ORIGINS),
+    trustProxyHops: env.TRUST_PROXY_HOPS,
+    staticUiEnabled: env.STATIC_UI_ENABLED,
     auth: {
       mode: authMode,
       jwtSecret: env.API_JWT_SECRET,

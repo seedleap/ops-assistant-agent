@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ops-assistant-agent
+data:
+  # Replace this with the real operations console origin before deployment.
+  CORS_ORIGINS: https://replace-me.invalid

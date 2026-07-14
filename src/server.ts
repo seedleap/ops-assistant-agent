@@ -35,15 +35,16 @@ export interface AppDependencies {
 export function createApp({ config, store, assistant, scheduler, logger }: AppDependencies): express.Express {
 const app = express();
 app.disable("x-powered-by");
+if (config.trustProxyHops > 0) app.set("trust proxy", config.trustProxyHops);
 app.use(pinoHttp({ logger }));
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
   origin: config.corsOrigins,
   methods: ["GET", "POST", "PUT", "DELETE"],
-  allowedHeaders: ["Content-Type"],
+  allowedHeaders: ["Authorization", "Content-Type"],
 }));
 app.use(express.json({ limit: "1mb" }));
-app.use(express.static(config.publicDir));
+if (config.staticUiEnabled) app.use(express.static(config.publicDir));
 
 const messageSchema = z.object({
   userId: z.string().min(1),
