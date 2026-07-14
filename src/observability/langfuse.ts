@@ -65,8 +65,8 @@ export function createAgentRunTrace(
   const tags = new Set<string>([
     input.type,
     profile.id,
-    profile.modelId,
-    `prompt:${profile.promptVersion}`,
+    profile.model.modelId,
+    `prompt:${profile.prompt.version}`,
     `prompt-sha256:${promptHash}`,
   ]);
   const root = startObservation(profile.traceName, {
@@ -74,13 +74,13 @@ export function createAgentRunTrace(
     metadata: {
       runId: input.runId,
       runType: input.type,
-      promptVersion: profile.promptVersion,
+      promptVersion: profile.prompt.version,
       promptHash,
-      modelProvider: profile.provider,
-      modelId: profile.modelId,
-      thinkingLevel: profile.thinkingLevel,
-      temperature: profile.temperature,
-      maxTurns: profile.maxTurns,
+      modelProvider: profile.model.provider,
+      modelId: profile.model.modelId,
+      thinkingLevel: profile.model.thinkingLevel,
+      temperature: profile.model.temperature,
+      maxTurns: profile.runtime.maxTurns,
     },
   }, { asType: "agent" });
   root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_NAME, profile.traceName);
@@ -95,10 +95,10 @@ export function createAgentRunTrace(
     pi.on("turn_start", (event) => {
       currentTurn?.end();
       currentTurn = root.startObservation(`turn-${event.turnIndex + 1}`, {
-        model: profile.modelId,
+        model: profile.model.modelId,
         modelParameters: {
-          temperature: profile.temperature,
-          thinkingLevel: profile.thinkingLevel,
+          temperature: profile.model.temperature,
+          thinkingLevel: profile.model.thinkingLevel,
         },
       }, { asType: "generation" });
     });
@@ -109,7 +109,7 @@ export function createAgentRunTrace(
       const usage = message.usage;
       currentTurn.update({
         output: sanitizeTraceValue(assistantText(message)),
-        model: message.model || profile.modelId,
+        model: message.model || profile.model.modelId,
         ...(usage ? {
           usageDetails: {
             input: Number(usage.input || 0),
@@ -170,7 +170,7 @@ export function createAgentRunTrace(
       root.update({
         output: sanitizeTraceValue(output),
         metadata: {
-          promptVersion: profile.promptVersion,
+          promptVersion: profile.prompt.version,
           promptHash,
           ...(stats ? {
             inputTokens: stats.tokens.input,

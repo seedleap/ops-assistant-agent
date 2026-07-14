@@ -29,24 +29,7 @@ function testConfig(dataDir: string): AppConfig {
     interactiveSessionTimeoutMinutes: 60,
     assistantDryRun: true,
     modelWhitelist: ["google-vertex/gemini-3-flash-preview"],
-    agentProfiles: {
-      creatorChat: {
-        provider: "google-vertex",
-        modelId: "gemini-3-flash-preview",
-        thinkingLevel: "low",
-        temperature: 0.3,
-        maxTurns: 10,
-        timeoutMs: 120_000,
-      },
-      creatorOutreach: {
-        provider: "google-vertex",
-        modelId: "gemini-3-flash-preview",
-        thinkingLevel: "off",
-        temperature: 0.2,
-        maxTurns: 6,
-        timeoutMs: 90_000,
-      },
-    },
+    agentProfileOverrides: {},
     langfuse: {
       enabled: false,
       environment: "test",

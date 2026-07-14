@@ -1,11 +1,12 @@
 import type { AgentProfileDefinition } from "./types.js";
 
 export const CREATOR_CHAT_PROFILE = {
-  id: "creator-chat",
   runType: "interactive",
   traceName: "ops-creator-chat",
-  promptVersion: "creator-growth-v2",
-  promptFileName: "creator-chat.md",
+  prompt: {
+    version: "creator-growth-v2",
+    fileName: "creator-chat.md",
+  },
   model: {
     provider: "google-vertex",
     modelId: "gemini-3-flash-preview",

@@ -2,16 +2,16 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { AGENT_PROFILE_DEFINITIONS } from "./registry.js";
+import { AGENT_PROFILES } from "./catalog.js";
 
 async function readProfilePrompt(fileName: string): Promise<string> {
   return readFile(join(process.cwd(), "config", "agent-profiles", fileName), "utf8");
 }
 
 test("every Agent Profile points to a non-empty scenario prompt", async () => {
-  for (const profile of AGENT_PROFILE_DEFINITIONS) {
-    const prompt = await readProfilePrompt(profile.promptFileName);
-    assert.ok(prompt.trim().length > 500, `${profile.id} prompt is unexpectedly short`);
+  for (const [id, profile] of Object.entries(AGENT_PROFILES)) {
+    const prompt = await readProfilePrompt(profile.prompt.fileName);
+    assert.ok(prompt.trim().length > 500, `${id} prompt is unexpectedly short`);
     assert.match(prompt, /Instruction boundary/);
     assert.match(prompt, /未满 13 岁/);
     assert.doesNotMatch(prompt, /世界杯/);

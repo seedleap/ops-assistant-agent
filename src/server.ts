@@ -12,7 +12,7 @@ import { queryLoopitData } from "./loopitDataGateway.js";
 import type { OpsAssistant } from "./agent/assistant.js";
 import { MODEL_OPTIONS } from "./agent/models.js";
 import { listAgentProfiles, resolveAgentProfileById } from "./agent/profiles/registry.js";
-import type { AgentProfileId } from "./agent/profiles/types.js";
+import { isAgentProfileId, type AgentProfileId } from "./agent/profiles/catalog.js";
 import type { OutreachScheduler } from "./scheduler.js";
 import { createId, DEFAULT_THREAD_ID, JsonStore } from "./store.js";
 import { createAuthentication } from "./http/security.js";
@@ -106,14 +106,16 @@ app.get("/im/messages", (req, res) => {
 // ---- 可选模型列表（前端下拉用，对比价格/效果） ----
 app.get("/config/models", (_req, res) => {
   const models = MODEL_OPTIONS.filter((model) => config.modelWhitelist.includes(`${model.provider}/${model.id}`));
-  res.json({ models, default: config.agentProfiles.creatorChat.modelId });
+  res.json({ models, default: resolveAgentProfileById(config, "creator-chat").model.modelId });
 });
 
-const profileIdSchema = z.enum(["creator-chat", "creator-outreach"]);
+const profileIdSchema = z.custom<AgentProfileId>(
+  (value) => typeof value === "string" && isAgentProfileId(value),
+);
 const contentSchema = z.object({ content: z.string().trim().min(1).max(100_000) });
 
 function profilePromptFile(id: AgentProfileId): string {
-  return resolveAgentProfileById(config, id).systemPromptFile;
+  return resolveAgentProfileById(config, id).prompt.file;
 }
 
 async function sendSystemPrompt(id: AgentProfileId, res: express.Response, next: express.NextFunction): Promise<void> {
@@ -147,19 +149,9 @@ app.get("/config/agent-profiles", (_req, res) => {
     id: profile.id,
     runType: profile.runType,
     traceName: profile.traceName,
-    promptVersion: profile.promptVersion,
-    model: {
-      provider: profile.provider,
-      modelId: profile.modelId,
-      thinkingLevel: profile.thinkingLevel,
-      temperature: profile.temperature,
-    },
-    runtime: {
-      maxTurns: profile.maxTurns,
-      timeoutMs: profile.timeoutMs,
-      maxRetries: profile.maxRetries,
-      compactionEnabled: profile.compactionEnabled,
-    },
+    promptVersion: profile.prompt.version,
+    model: profile.model,
+    runtime: profile.runtime,
     toolNames: profile.toolNames,
   }));
   res.json({ profiles });

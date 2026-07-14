@@ -13,18 +13,25 @@ import type { AgentProfile } from "./profiles/types.js";
 const PROFILE: AgentProfile = {
   id: "creator-chat",
   traceName: "ops-creator-chat",
-  promptVersion: "creator-growth-v2",
-  provider: "google-vertex",
-  modelId: "gemini-3-flash-preview",
-  thinkingLevel: "low",
-  temperature: 0.3,
-  maxTurns: 10,
-  timeoutMs: 120_000,
-  maxRetries: 2,
+  prompt: {
+    version: "creator-growth-v2",
+    fileName: "creator-chat.md",
+    file: "/tmp/creator-chat.md",
+  },
+  model: {
+    provider: "google-vertex",
+    modelId: "gemini-3-flash-preview",
+    thinkingLevel: "low",
+    temperature: 0.3,
+  },
+  runtime: {
+    maxTurns: 10,
+    timeoutMs: 120_000,
+    maxRetries: 2,
+    compactionEnabled: true,
+  },
   toolNames: ["query_work_overview"],
-  compactionEnabled: true,
   runType: "interactive",
-  systemPromptFile: "/tmp/creator-chat.md",
 };
 
 test("model parameters extension patches Vertex payload without enabling thoughts", () => {
@@ -38,7 +45,7 @@ test("model parameters extension patches Vertex payload without enabling thought
   createModelParametersExtension(PROFILE)(pi);
   const result = handler?.({
     payload: {
-      model: PROFILE.modelId,
+      model: PROFILE.model.modelId,
       config: { thinkingConfig: { thinkingLevel: "LOW" } },
     },
   }) as { config?: { temperature?: number; thinkingConfig?: Record<string, unknown> } };

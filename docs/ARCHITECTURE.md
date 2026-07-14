@@ -48,6 +48,7 @@ src/
 │   ├── extensions.ts    # provider parameters and max-turn guard
 │   ├── models.ts        # AuthStorage, ModelRegistry and model whitelist
 │   ├── profiles/        # one typed composition root per Agent
+│   │   ├── catalog.ts   # keyed registry; Profile IDs derive from its keys
 │   │   ├── creator-chat.ts
 │   │   ├── creator-outreach.ts
 │   │   ├── registry.ts
@@ -72,7 +73,7 @@ There are two profiles:
 - `creator-chat`: full read-only diagnostic tool set, interactive compaction enabled.
 - `creator-outreach`: smaller tool set, fewer turns and no cross-run compaction.
 
-Each profile controls:
+Each profile definition is a small, static composition root that controls:
 
 - its own system-prompt file;
 - exact provider and model ID;
@@ -85,10 +86,18 @@ Each profile controls:
 
 Production model selection is constrained by `MODEL_WHITELIST`. Unknown or disallowed models fail explicitly instead of silently falling back, so model experiments remain attributable.
 
-Profile TypeScript files own versioned behavior and defaults. Environment variables
-may override deploy-time model parameters, but credentials, MCP endpoints, JWT,
-storage and Langfuse remain infrastructure configuration. `OpsSessionFactory` only
-translates a resolved Profile into Pi services and `createAgentSession()` options.
+`catalog.ts` is the only Profile registry. `AgentProfileId` is derived from its
+keys, so adding a definition does not require maintaining a separate ID union or
+resolver branch. Profile TypeScript files own versioned behavior and defaults;
+optional environment overrides are keyed by the same derived ID. Credentials,
+MCP endpoints, JWT, storage and Langfuse remain infrastructure configuration.
+`OpsSessionFactory` only translates a resolved Profile into Pi services and
+`createAgentSession()` options.
+
+Prompt, model and runtime values remain grouped in both the static definition and
+the resolved runtime Profile. Resolution only adds the registry ID, absolute
+prompt path and optional deployment overrides; it does not flatten the object into
+a second shape.
 
 ## Pi integration
 

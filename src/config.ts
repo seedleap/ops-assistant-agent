@@ -1,9 +1,11 @@
 import "dotenv/config";
 import { isAbsolute, resolve } from "node:path";
 import { z } from "zod";
-import { CREATOR_CHAT_PROFILE } from "./agent/profiles/creator-chat.js";
-import { CREATOR_OUTREACH_PROFILE } from "./agent/profiles/creator-outreach.js";
-import type { AgentProfileConfig } from "./agent/profiles/types.js";
+import { AGENT_PROFILES, type AgentProfileId } from "./agent/profiles/catalog.js";
+import type { AgentProfileOverrides } from "./agent/profiles/types.js";
+
+const CREATOR_CHAT_PROFILE = AGENT_PROFILES["creator-chat"];
+const CREATOR_OUTREACH_PROFILE = AGENT_PROFILES["creator-outreach"];
 
 const thinkingLevelSchema = z.enum(["off", "minimal", "low", "medium", "high"]);
 const optionalString = z.preprocess(
@@ -127,10 +129,7 @@ export interface AppConfig {
   interactiveSessionTimeoutMinutes: number;
   assistantDryRun: boolean;
   modelWhitelist: string[];
-  agentProfiles: {
-    creatorChat: AgentProfileConfig;
-    creatorOutreach: AgentProfileConfig;
-  };
+  agentProfileOverrides: Partial<Record<AgentProfileId, AgentProfileOverrides>>;
   langfuse: LangfuseConfig;
   loopitDataFile: string;
   skillsDir: string;
@@ -254,22 +253,30 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     interactiveSessionTimeoutMinutes: env.INTERACTIVE_SESSION_TIMEOUT_MINUTES,
     assistantDryRun: env.ASSISTANT_DRY_RUN,
     modelWhitelist,
-    agentProfiles: {
-      creatorChat: {
-        provider: env.ASSISTANT_MODEL_PROVIDER,
-        modelId: env.ASSISTANT_MODEL_ID,
-        thinkingLevel: env.ASSISTANT_THINKING_LEVEL,
-        temperature: env.ASSISTANT_TEMPERATURE,
-        maxTurns: env.ASSISTANT_MAX_TURNS,
-        timeoutMs: env.ASSISTANT_TIMEOUT_MS,
+    agentProfileOverrides: {
+      "creator-chat": {
+        model: {
+          provider: env.ASSISTANT_MODEL_PROVIDER,
+          modelId: env.ASSISTANT_MODEL_ID,
+          thinkingLevel: env.ASSISTANT_THINKING_LEVEL,
+          temperature: env.ASSISTANT_TEMPERATURE,
+        },
+        runtime: {
+          maxTurns: env.ASSISTANT_MAX_TURNS,
+          timeoutMs: env.ASSISTANT_TIMEOUT_MS,
+        },
       },
-      creatorOutreach: {
-        provider: outreachProvider,
-        modelId: outreachModelId,
-        thinkingLevel: env.OUTREACH_THINKING_LEVEL,
-        temperature: env.OUTREACH_TEMPERATURE,
-        maxTurns: env.OUTREACH_MAX_TURNS,
-        timeoutMs: env.OUTREACH_TIMEOUT_MS,
+      "creator-outreach": {
+        model: {
+          provider: outreachProvider,
+          modelId: outreachModelId,
+          thinkingLevel: env.OUTREACH_THINKING_LEVEL,
+          temperature: env.OUTREACH_TEMPERATURE,
+        },
+        runtime: {
+          maxTurns: env.OUTREACH_MAX_TURNS,
+          timeoutMs: env.OUTREACH_TIMEOUT_MS,
+        },
       },
     },
     langfuse: {
