@@ -13,7 +13,7 @@ test("each Agent Profile owns its prompt, tools and runtime policy", () => {
 
   const chat = resolveAgentProfileById(config, "creator-chat");
   assert.equal(chat.systemPromptFile, "/tmp/ops-agent-prompts/creator-chat.md");
-  assert.equal(chat.promptVersion, "creator-growth-v1");
+  assert.equal(chat.promptVersion, "creator-growth-v2");
   assert.equal(chat.maxTurns, 12);
   assert.equal(chat.maxRetries, 2);
   assert.equal(chat.compactionEnabled, true);
@@ -21,7 +21,7 @@ test("each Agent Profile owns its prompt, tools and runtime policy", () => {
 
   const outreach = resolveAgentProfileById(config, "creator-outreach");
   assert.equal(outreach.systemPromptFile, "/tmp/ops-agent-prompts/creator-outreach.md");
-  assert.equal(outreach.promptVersion, "creator-outreach-v1");
+  assert.equal(outreach.promptVersion, "creator-outreach-v2");
   assert.equal(outreach.timeoutMs, 45_000);
   assert.equal(outreach.compactionEnabled, false);
   assert.ok(!outreach.toolNames.includes("query_work_prompt"));

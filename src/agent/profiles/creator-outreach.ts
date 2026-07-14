@@ -4,7 +4,7 @@ export const CREATOR_OUTREACH_PROFILE = {
   id: "creator-outreach",
   runType: "outreach",
   traceName: "ops-creator-outreach",
-  promptVersion: "creator-outreach-v1",
+  promptVersion: "creator-outreach-v2",
   promptFileName: "creator-outreach.md",
   model: {
     provider: "google-vertex",

@@ -4,7 +4,7 @@ export const CREATOR_CHAT_PROFILE = {
   id: "creator-chat",
   runType: "interactive",
   traceName: "ops-creator-chat",
-  promptVersion: "creator-growth-v1",
+  promptVersion: "creator-growth-v2",
   promptFileName: "creator-chat.md",
   model: {
     provider: "google-vertex",

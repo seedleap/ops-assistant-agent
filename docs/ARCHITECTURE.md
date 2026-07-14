@@ -32,6 +32,12 @@ Agent trace
   └─ final output / usage / status
 ```
 
+The Agent is one component in a wider creator-operations flow. The operations
+console, data platform, activity core and client retain their own authoritative
+state; the Agent personalizes and explains confirmed facts but does not own
+eligibility, enrollment, task progress, rewards or card state. See
+[`CREATOR-OPERATIONS-CONTEXT.md`](CREATOR-OPERATIONS-CONTEXT.md).
+
 ## Source layout
 
 ```text
@@ -157,6 +163,8 @@ The current `JsonStore`, local scheduler, configuration UI and outbox remain MVP
 - durable scheduler/queue;
 - real segmentation service;
 - real IM sender;
+- activity eligibility, enrollment, task-progress and reward services;
+- authoritative activity-card payloads and client actions;
 - externally owned Loopit business APIs behind the stable data MCP contract.
 
 These infrastructure changes are independent from the Pi runtime refactor and should not be embedded into Agent prompts or tools.

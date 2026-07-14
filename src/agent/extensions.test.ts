@@ -13,7 +13,7 @@ import type { AgentProfile } from "./profiles/types.js";
 const PROFILE: AgentProfile = {
   id: "creator-chat",
   traceName: "ops-creator-chat",
-  promptVersion: "creator-growth-v1",
+  promptVersion: "creator-growth-v2",
   provider: "google-vertex",
   modelId: "gemini-3-flash-preview",
   thinkingLevel: "low",
