@@ -1,54 +1,49 @@
 import { join } from "node:path";
 import type { AppConfig } from "../../config.js";
 import type { AssistantRunInput } from "../../types.js";
-import { CREATOR_CHAT_PROFILE } from "./creator-chat.js";
-import { CREATOR_OUTREACH_PROFILE } from "./creator-outreach.js";
-import type {
-  AgentProfile,
-  AgentProfileConfig,
-  AgentProfileDefinition,
-  AgentProfileId,
-} from "./types.js";
+import {
+  AGENT_PROFILES,
+  AGENT_PROFILE_IDS,
+  type AgentProfileId,
+} from "./catalog.js";
+import type { AgentProfile } from "./types.js";
 
-export const AGENT_PROFILE_DEFINITIONS = [
-  CREATOR_CHAT_PROFILE,
-  CREATOR_OUTREACH_PROFILE,
-] as const;
-
-function definitionById(id: AgentProfileId): AgentProfileDefinition {
-  const definition = AGENT_PROFILE_DEFINITIONS.find((item) => item.id === id);
-  if (!definition) throw new Error(`Unknown Agent Profile: ${id}`);
-  return definition;
-}
+const PROFILE_BY_RUN_TYPE = {
+  interactive: "creator-chat",
+  outreach: "creator-outreach",
+} as const satisfies Record<AssistantRunInput["type"], AgentProfileId>;
 
 export function resolveAgentProfileById(
   config: AppConfig,
   id: AgentProfileId,
   modelIdOverride?: string,
-): AgentProfile {
-  const definition = definitionById(id);
-  const configured: AgentProfileConfig = id === "creator-chat"
-    ? config.agentProfiles.creatorChat
-    : config.agentProfiles.creatorOutreach;
+): AgentProfile<AgentProfileId> {
+  const definition = AGENT_PROFILES[id];
+  const overrides = config.agentProfileOverrides[id];
   return {
-    id: definition.id,
-    runType: definition.runType,
-    traceName: definition.traceName,
-    promptVersion: definition.promptVersion,
-    toolNames: definition.toolNames,
-    ...definition.runtime,
-    ...configured,
-    ...(modelIdOverride ? { modelId: modelIdOverride } : {}),
-    systemPromptFile: join(config.agentPromptsDir, definition.promptFileName),
+    ...definition,
+    id,
+    prompt: {
+      ...definition.prompt,
+      file: join(config.agentPromptsDir, definition.prompt.fileName),
+    },
+    model: {
+      ...definition.model,
+      ...overrides?.model,
+      ...(modelIdOverride ? { modelId: modelIdOverride } : {}),
+    },
+    runtime: {
+      ...definition.runtime,
+      ...overrides?.runtime,
+    },
   };
 }
 
 export function resolveAgentProfile(config: AppConfig, input: AssistantRunInput): AgentProfile {
-  return input.type === "outreach"
-    ? resolveAgentProfileById(config, "creator-outreach")
-    : resolveAgentProfileById(config, "creator-chat", input.model);
+  const id = PROFILE_BY_RUN_TYPE[input.type];
+  return resolveAgentProfileById(config, id, input.type === "interactive" ? input.model : undefined);
 }
 
 export function listAgentProfiles(config: AppConfig): AgentProfile[] {
-  return AGENT_PROFILE_DEFINITIONS.map((definition) => resolveAgentProfileById(config, definition.id));
+  return AGENT_PROFILE_IDS.map((id) => resolveAgentProfileById(config, id));
 }

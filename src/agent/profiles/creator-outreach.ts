@@ -1,11 +1,12 @@
 import type { AgentProfileDefinition } from "./types.js";
 
 export const CREATOR_OUTREACH_PROFILE = {
-  id: "creator-outreach",
   runType: "outreach",
   traceName: "ops-creator-outreach",
-  promptVersion: "creator-outreach-v2",
-  promptFileName: "creator-outreach.md",
+  prompt: {
+    version: "creator-outreach-v2",
+    fileName: "creator-outreach.md",
+  },
   model: {
     provider: "google-vertex",
     modelId: "gemini-3-flash-preview",

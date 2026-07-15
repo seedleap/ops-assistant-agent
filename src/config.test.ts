@@ -36,9 +36,9 @@ test("loadConfig parses explicit runtime values", () => {
   });
   assert.equal(config.schedulerEnabled, false);
   assert.equal(config.assistantDryRun, true);
-  assert.equal(config.agentProfiles.creatorChat.temperature, 0.4);
-  assert.equal(config.agentProfiles.creatorChat.maxTurns, 10);
-  assert.equal(config.agentProfiles.creatorOutreach.maxTurns, 6);
+  assert.equal(config.agentProfileOverrides["creator-chat"]?.model?.temperature, 0.4);
+  assert.equal(config.agentProfileOverrides["creator-chat"]?.runtime?.maxTurns, 10);
+  assert.equal(config.agentProfileOverrides["creator-outreach"]?.runtime?.maxTurns, 6);
   assert.match(config.agentPromptsDir, /config\/agent-profiles$/);
 });
 

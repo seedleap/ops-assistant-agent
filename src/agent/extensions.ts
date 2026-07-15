@@ -13,14 +13,14 @@ export function createModelParametersExtension(profile: AgentProfile): Extension
       const payload = asRecord(event.payload);
       if (!payload) return;
 
-      if (profile.provider === "google-vertex") {
+      if (profile.model.provider === "google-vertex") {
         const config = asRecord(payload.config) || {};
         const thinkingConfig = asRecord(config.thinkingConfig) || {};
         return {
           ...payload,
           config: {
             ...config,
-            temperature: profile.temperature,
+            temperature: profile.model.temperature,
             thinkingConfig: {
               ...thinkingConfig,
               includeThoughts: false,
@@ -29,8 +29,8 @@ export function createModelParametersExtension(profile: AgentProfile): Extension
         };
       }
 
-      if (profile.provider === "openai" || profile.provider === "openrouter") {
-        return { ...payload, temperature: profile.temperature };
+      if (profile.model.provider === "openai" || profile.model.provider === "openrouter") {
+        return { ...payload, temperature: profile.model.temperature };
       }
     });
   };
@@ -39,9 +39,9 @@ export function createModelParametersExtension(profile: AgentProfile): Extension
 export function createTurnLimitExtension(profile: AgentProfile): ExtensionFactory {
   return (pi) => {
     pi.on("turn_start", (event, ctx) => {
-      if (event.turnIndex < profile.maxTurns) return;
+      if (event.turnIndex < profile.runtime.maxTurns) return;
       ctx.abort();
-      throw new Error(`Agent exceeded maxTurns=${profile.maxTurns}`);
+      throw new Error(`Agent exceeded maxTurns=${profile.runtime.maxTurns}`);
     });
   };
 }

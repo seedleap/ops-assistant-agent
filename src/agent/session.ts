@@ -51,13 +51,16 @@ export class OpsSessionFactory {
     await mkdir(input.sessionDir, { recursive: true });
 
     const models = await this.models();
-    const model = models.resolve(profile.provider, profile.modelId);
+    const model = models.resolve(profile.model.provider, profile.model.modelId);
     const systemPrompt = await this.systemPrompt(profile);
     const promptHash = createHash("sha256").update(systemPrompt).digest("hex").slice(0, 16);
     const trace = createAgentRunTrace(this.observability, profile, input, promptHash);
     const settingsManager = SettingsManager.inMemory({
-      compaction: { enabled: profile.compactionEnabled },
-      retry: { enabled: profile.maxRetries > 0, maxRetries: profile.maxRetries },
+      compaction: { enabled: profile.runtime.compactionEnabled },
+      retry: {
+        enabled: profile.runtime.maxRetries > 0,
+        maxRetries: profile.runtime.maxRetries,
+      },
     });
     const resourceLoader = new DefaultResourceLoader({
       cwd: input.workDir,
@@ -88,7 +91,7 @@ export class OpsSessionFactory {
       authStorage: models.authStorage,
       modelRegistry: models.registry,
       model,
-      thinkingLevel: profile.thinkingLevel,
+      thinkingLevel: profile.model.thinkingLevel,
       resourceLoader,
       tools: customTools.map((tool) => tool.name),
       customTools,
@@ -114,8 +117,8 @@ export class OpsSessionFactory {
   }
 
   private async systemPrompt(profile: AgentProfile): Promise<string> {
-    const base = (await readFile(profile.systemPromptFile, "utf8")).trim();
-    if (!base) throw new Error(`Agent Profile ${profile.id} has an empty system prompt: ${profile.systemPromptFile}`);
+    const base = (await readFile(profile.prompt.file, "utf8")).trim();
+    if (!base) throw new Error(`Agent Profile ${profile.id} has an empty system prompt: ${profile.prompt.file}`);
     const index = await knowledgeIndex(this.config.skillsDir).catch(() => "");
     return index ? `${base}\n\n${index}` : base;
   }

@@ -50,7 +50,7 @@ export class OpsAssistant {
     let output = "";
     let runError: unknown;
     try {
-      await this.promptWithTimeout(session, this.buildPrompt(input), profile.timeoutMs);
+      await this.promptWithTimeout(session, this.buildPrompt(input), profile.runtime.timeoutMs);
       const result = this.readLastAssistantMessage(session);
       if (result.error) throw new Error(result.error);
       output = (result.text || chunks.join("")).trim();
