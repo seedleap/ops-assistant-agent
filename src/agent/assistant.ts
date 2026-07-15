@@ -54,6 +54,7 @@ export class OpsAssistant {
       const result = this.readLastAssistantMessage(session);
       if (result.error) throw new Error(result.error);
       output = (result.text || chunks.join("")).trim();
+      if (!output) throw new Error("Agent returned an empty response");
       const after = session.getSessionStats();
       emit?.({ type: "usage", usage: usageDelta(before, after, modelName) });
       return output;
@@ -72,7 +73,9 @@ export class OpsAssistant {
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => {
-        void session.abort().finally(() => reject(new Error(`Agent timed out after ${timeoutMs}ms`)));
+        // 先让调用方超时返回，abort 只负责尽力清理底层模型请求。
+        reject(new Error(`Agent timed out after ${timeoutMs}ms`));
+        void session.abort().catch(() => {});
       }, timeoutMs);
     });
     try {

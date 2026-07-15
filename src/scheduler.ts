@@ -4,6 +4,7 @@ import { createId, JsonStore } from "./store.js";
 import type { ConversationRecord, OutboxMessage, ScheduleRecord } from "./types.js";
 import { OpsAssistant } from "./agent/assistant.js";
 import type { Logger } from "pino";
+import { conversationWorkDir } from "./runtime/paths.js";
 
 function addMinutes(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60_000);
@@ -94,7 +95,7 @@ export class OutreachScheduler {
     this.running.add(schedule.id);
     const runId = createId("run");
     const sessionDir = join(this.config.dataDir, "pi-sessions", "outreach", runId);
-    const workDir = join(this.config.dataDir, "workspaces", schedule.userId, schedule.imThreadId, "outreach", runId);
+    const workDir = join(conversationWorkDir(this.config.dataDir, schedule.userId, schedule.imThreadId, "outreach"), runId);
     const prompt = buildOutreachPrompt(schedule, conversation);
 
     await this.store.beginRun({
