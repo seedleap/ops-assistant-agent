@@ -11,6 +11,7 @@
 - 默认 Skill 按 Pi 规范使用 `<name>/SKILL.md`，会话启动时注册到 system prompt，由内置 `read` 工具按需加载。
 - 远程业务 Skill 从 S3 物料化到会话目录，同样由 Pi 内置 `read` 工具只读加载。
 - 默认 Skill 及其 `docs/` 参考资料通过 Pi 内置 `read` 工具读取。
+- 已预注册独立图片生成工具，沿用 Carmack 的 Azure Image 参数（默认 `gpt-image-2`），当前不绑定到默认 Agent Profile。
 - Loopit 业务数据通过 Streamable HTTP MCP 访问，不在本项目内实现数据查询逻辑。
 - 可选 Langfuse trace，记录模型、工具、Token 和费用信息。
 

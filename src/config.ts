@@ -74,6 +74,11 @@ const environmentSchema = z.object({
   SKILL_CACHE_DIR: z.string().trim().min(1).default("./data/skill-cache"),
   SKILL_FETCH_TIMEOUT_MS: positiveInteger(120_000),
   SKILL_MAX_BYTES: positiveInteger(20 * 1024 * 1024),
+  // 图片能力沿用 Carmack 的 Azure OpenAI-compatible 参数；未配置时只是不启用工具。
+  AZURE_IMAGE_BASE_URL: optionalString,
+  AZURE_IMAGE_API_KEY: optionalString,
+  AZURE_IMAGE_DEPLOYMENT: z.string().trim().min(1).default("gpt-image-2"),
+  AZURE_IMAGE_TIMEOUT_MS: positiveInteger(120_000),
   CONVERSATION_ARCHIVE_ENABLED: booleanString(false),
   CONVERSATION_ARCHIVE_BUCKET: optionalString,
   CONVERSATION_ARCHIVE_PREFIX: z.string().trim().min(1).default("ops-conversations"),
@@ -142,6 +147,12 @@ export interface AppConfig {
   langfuse: LangfuseConfig;
   loopitDataFile: string;
   skillsDir: string;
+  azureImage: {
+    baseUrl?: string;
+    apiKey?: string;
+    deployment: string;
+    timeoutMs: number;
+  };
   remoteSkills?: {
     enabled: boolean;
     bucket?: string;
@@ -325,6 +336,12 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     },
     loopitDataFile: resolve(env.LOOPIT_DATA_FILE),
     skillsDir: resolve(env.SKILLS_DIR),
+    azureImage: {
+      baseUrl: env.AZURE_IMAGE_BASE_URL,
+      apiKey: env.AZURE_IMAGE_API_KEY,
+      deployment: env.AZURE_IMAGE_DEPLOYMENT,
+      timeoutMs: env.AZURE_IMAGE_TIMEOUT_MS,
+    },
     remoteSkills: {
       enabled: env.REMOTE_SKILLS_ENABLED,
       bucket: env.SKILL_S3_BUCKET,

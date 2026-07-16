@@ -36,6 +36,10 @@ function testConfig(dataDir: string): AppConfig {
     },
     loopitDataFile: join(process.cwd(), "sample-data", "loopit-data.json"),
     skillsDir: join(process.cwd(), "skills"),
+    azureImage: {
+      deployment: "gpt-image-2",
+      timeoutMs: 120_000,
+    },
     opsMcp: {
       timeoutMs: 120_000,
       maxResponseBytes: 2 * 1024 * 1024,

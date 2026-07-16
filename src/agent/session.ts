@@ -20,12 +20,15 @@ import { createModelParametersExtension, createTurnLimitExtension } from "./exte
 import { OpsModelRegistry } from "./models.js";
 import type { AgentProfile } from "./profiles/types.js";
 import { RemoteSkillStore } from "../integrations/skills/index.js";
+import { AzureImageClient, createGenerateImageTool } from "../integrations/images/index.js";
 
 export interface OpsSessionHandle {
   session: AgentSession;
   trace?: AgentRunTrace;
   modelName: string;
 }
+
+const BUILTIN_TOOL_NAMES = new Set(["read"]);
 
 export class OpsSessionFactory {
   private modelsPromise?: Promise<OpsModelRegistry>;
@@ -47,6 +50,8 @@ export class OpsSessionFactory {
     });
     this.tools = [
       ...createOpsDataTools(this.opsMcp),
+      // 预注册图片工具，但默认 Profile 未声明 generate_image，因此当前 Agent 不会调用。
+      createGenerateImageTool(new AzureImageClient(config.azureImage)),
     ];
   }
 
@@ -99,7 +104,7 @@ export class OpsSessionFactory {
     const sessionManager = input.continueSession && existsSync(input.sessionDir)
       ? SessionManager.continueRecent(input.workDir, input.sessionDir)
       : SessionManager.create(input.workDir, input.sessionDir);
-    const customTools = this.selectTools(profile.toolNames);
+    const selectedTools = this.selectTools(profile.toolNames);
     const { session } = await createAgentSession({
       cwd: input.workDir,
       agentDir: this.config.dataDir,
@@ -108,8 +113,8 @@ export class OpsSessionFactory {
       model,
       thinkingLevel: profile.model.thinkingLevel,
       resourceLoader,
-      tools: customTools.map((tool) => tool.name),
-      customTools,
+      tools: selectedTools.names,
+      customTools: selectedTools.customTools,
       sessionManager,
       settingsManager,
     });
@@ -122,13 +127,16 @@ export class OpsSessionFactory {
     return this.modelsPromise;
   }
 
-  private selectTools(names: readonly string[]): ToolDefinition[] {
+  private selectTools(names: readonly string[]): { names: string[]; customTools: ToolDefinition[] } {
     const byName = new Map(this.tools.map((tool) => [tool.name, tool]));
-    return names.map((name) => {
+    const customTools: ToolDefinition[] = [];
+    for (const name of names) {
+      if (BUILTIN_TOOL_NAMES.has(name)) continue;
       const tool = byName.get(name);
       if (!tool) throw new Error(`Agent profile references unknown tool: ${name}`);
-      return tool;
-    });
+      customTools.push(tool);
+    }
+    return { names: [...names], customTools };
   }
 
   private async systemPrompt(profile: AgentProfile): Promise<string> {

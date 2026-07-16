@@ -56,7 +56,12 @@ LANGFUSE_SECRET_KEY
 GOOGLE_CLOUD_PROJECT
 OPS_MCP_URL
 OPS_MCP_TOKEN
+AZURE_IMAGE_BASE_URL
+AZURE_IMAGE_API_KEY
 ```
+
+图片模型沿用 Carmack 的 Azure Image 参数命名；`AZURE_IMAGE_DEPLOYMENT` 默认为
+`gpt-image-2`，属于普通配置，不要把 API key 写入镜像或提交到仓库。
 
 Mount the Google service-account JSON separately at
 `/var/run/secrets/google/key.json`. Prefer workload identity when the target
