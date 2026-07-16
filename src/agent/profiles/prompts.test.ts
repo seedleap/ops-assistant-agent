@@ -29,6 +29,10 @@ test("creator chat prompt preserves evidence, safety and action contracts", asyn
   assert.match(prompt, /一个优先级最高、可以直接执行的修改建议/);
   assert.match(prompt, /不得暗示参加后一定获得曝光、奖励、升级或官方推荐/);
   assert.match(prompt, /你不是活动、任务、积分或客户端系统/);
+  assert.match(prompt, /约 13 岁的儿童/);
+  assert.match(prompt, /色情、性暗示、血腥暴力、自残、自杀/);
+  assert.match(prompt, /最多追问一个简单问题/);
+  assert.match(prompt, /不鼓励线下见面、私下交易/);
   assert.match(prompt, /活动说明或运营知识只能证明“规则是什么”/);
   assert.match(prompt, /只有收到活动中台确认的资格状态/);
   assert.match(prompt, /只复述活动中台返回的当前状态，不根据作品数据自行推算/);
@@ -48,4 +52,7 @@ test("creator outreach prompt preserves value gate and no-send contract", async 
   assert.match(prompt, /运营人群标签只代表候选范围，不等于活动资格/);
   assert.match(prompt, /必须同时具备活动中台确认的当前资格、有效活动状态和官方行动入口/);
   assert.match(prompt, /结构化活动卡片中的活动 ID、任务、奖励、进度、按钮和跳转地址/);
+  assert.match(prompt, /约 13 岁的儿童/);
+  assert.match(prompt, /色情、性暗示、血腥暴力、自残、自杀/);
+  assert.match(prompt, /无法确认内容适合儿童/);
 });

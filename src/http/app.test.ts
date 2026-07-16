@@ -111,6 +111,22 @@ test("health is public while API routes require a valid JWT", async () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ userId: "u".repeat(129), text: "hello" })
       .expect(400);
+
+    const creatorAssistant = await request(app)
+      .post("/creator-assistant/messages")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ userId: "creator-1", text: "帮我看看作品下一步怎么改" })
+      .expect(200);
+    assert.equal(creatorAssistant.body.message.text, "帮我看看作品下一步怎么改");
+    assert.equal(creatorAssistant.body.reply, null);
+
+    const creatorAssistantStream = await request(app)
+      .post("/creator-assistant/stream")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ userId: "creator-1", text: "再给我一个验证方法" })
+      .expect(200);
+    assert.match(creatorAssistantStream.headers["content-type"], /text\/event-stream/);
+    assert.match(creatorAssistantStream.text, /"type":"done"/);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }

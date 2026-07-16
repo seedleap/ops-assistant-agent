@@ -7,6 +7,7 @@
 - Gemini / Vertex 模型调用，支持 Profile 级模型、参数、提示词和工具白名单。
 - `/im/messages` 一次性返回 JSON。
 - `/im/stream` 以 SSE 流式返回文本、工具调用、用量和最终结果。
+- 创作助手 MVP 也提供 `/creator-assistant/messages` 和 `/creator-assistant/stream`，与 `/im/*` 共享多轮会话和数据工具。
 - 对话按 `userId + imThreadId` 持久化，可继续已有 Session。
 - 默认 Skill 按 Pi 规范使用 `<name>/SKILL.md`，会话启动时注册到 system prompt，由内置 `read` 工具按需加载。
 - 远程业务 Skill 从 S3 物料化到会话目录，同样由 Pi 内置 `read` 工具只读加载。

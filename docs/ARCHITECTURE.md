@@ -38,6 +38,18 @@ state; the Agent personalizes and explains confirmed facts but does not own
 eligibility, enrollment, task progress, rewards or card state. See
 [`CREATOR-OPERATIONS-CONTEXT.md`](CREATOR-OPERATIONS-CONTEXT.md).
 
+For PRD 1.0, the runtime boundary is intentionally two contracts:
+
+- the execution center supplies an immutable campaign/version context and
+  time-bounded evidence snapshot;
+- the Agent returns a validated `SEND`/`NO_OUTREACH` decision, personalized text,
+  reason code and evidence references.
+
+`SEND` is only an Agent recommendation. The execution center still owns content
+policy checks, deduplication, frequency limits, approval, message delivery and
+all business writes. The model must never invent activity IDs, task progress,
+reward amounts, claim status or action URLs.
+
 ## Source layout
 
 ```text

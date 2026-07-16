@@ -390,7 +390,8 @@ app.post("/data/query", async (req, res, next) => {
   }
 });
 
-app.post("/im/messages", async (req, res, next) => {
+// 创作助手 MVP 的稳定入口；/im/* 保留给现有客户端兼容，二者共享同一会话和处理链路。
+app.post(["/creator-assistant/messages", "/im/messages"], async (req, res, next) => {
   /*
    * 非流式和流式接口都必须按会话串行。
    * Pi 会复用同一个 session 目录，并发写入会导致上下文分叉或文件损坏。
@@ -474,7 +475,7 @@ app.post("/im/messages", async (req, res, next) => {
 });
 
 // 流式对话：边跑边把 agent 的过程(工具调用)和回复文本推给前端 IM 页面。
-app.post("/im/stream", async (req, res, next) => {
+app.post(["/creator-assistant/stream", "/im/stream"], async (req, res, next) => {
   let input: z.infer<typeof messageSchema>;
   try {
     input = messageSchema.parse(req.body);
