@@ -141,6 +141,12 @@ Pi receives `thinkingLevel` directly. Provider-specific payload parameters are i
 
 Do not add provider payload mutation elsewhere in the application.
 
+Gemini 运行约束：
+
+- 系统提示词和知识库索引在会话内保持稳定，动态 UID 只放在本轮用户提示中，尽量保留可复用的缓存前缀。
+- 只把可见文本写入响应、会话后续处理和 Langfuse；thinking parts 不作为业务上下文传递。
+- Pi 的 `input`、`cacheRead`、`cacheWrite` token 会同时记录，并按 `cacheRead / (input + cacheRead + cacheWrite)` 计算命中率，便于发现提示词漂移或缓存失效。
+
 ## Langfuse contract
 
 One Agent run maps to one trace:

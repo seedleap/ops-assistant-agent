@@ -123,6 +123,7 @@ export class OpsSessionFactory {
   private async systemPrompt(profile: AgentProfile): Promise<string> {
     const base = (await readFile(profile.prompt.file, "utf8")).trim();
     if (!base) throw new Error(`Agent Profile ${profile.id} has an empty system prompt: ${profile.prompt.file}`);
+    // 系统提示和知识库目录在一轮会话内保持稳定，避免把易变信息放进缓存前缀。
     const index = await knowledgeIndex(this.config.skillsDir).catch(() => "");
     return index ? `${base}\n\n${index}` : base;
   }

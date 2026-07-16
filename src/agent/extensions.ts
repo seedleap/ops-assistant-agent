@@ -23,6 +23,7 @@ export function createModelParametersExtension(profile: AgentProfile): Extension
             temperature: profile.model.temperature,
             thinkingConfig: {
               ...thinkingConfig,
+              // Gemini 可以内部思考，但不要把 thought parts 回传并写入会话上下文。
               includeThoughts: false,
             },
           },
