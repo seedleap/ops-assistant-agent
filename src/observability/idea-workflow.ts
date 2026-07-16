@@ -5,6 +5,12 @@ import type { Observability } from "./index.js";
 import { errorMessage, sanitizeTraceValue } from "./sanitize.js";
 
 export interface IdeaWorkflowStageTrace {
+  parentSpanContext?: {
+    traceId: string;
+    spanId: string;
+    traceFlags: number;
+    isRemote?: boolean;
+  };
   finish(output?: unknown, error?: unknown, metadata?: Record<string, unknown>): void;
 }
 
@@ -23,7 +29,7 @@ export function createIdeaWorkflowTrace(
   record: IdeaWorkflowRecord,
 ): IdeaWorkflowTrace {
   if (!observability.enabled) return NOOP;
-  const root = startObservation("idea-workflow", {
+  const root = startObservation("idea", {
     input: sanitizeTraceValue(record.input),
     metadata: {
       workflowId: record.id,
@@ -34,11 +40,11 @@ export function createIdeaWorkflowTrace(
       ...record.metadata,
     },
   }, { asType: "agent" });
-  root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_NAME, "idea-workflow");
+  root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_NAME, "idea");
   root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_USER_ID, record.userId);
   root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_SESSION_ID, record.id);
   root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [
-    "idea-workflow",
+    "idea",
     `attempt:${record.attempt}`,
     `workflow-version:${record.metadata.workflowVersion}`,
   ]);
@@ -48,6 +54,7 @@ export function createIdeaWorkflowTrace(
       const startedAt = Date.now();
       const stage = root.startObservation(name, { input: sanitizeTraceValue(input) }, { asType: "span" });
       return {
+        parentSpanContext: stage.otelSpan.spanContext(),
         finish(output, error, metadata) {
           stage.update({
             output: sanitizeTraceValue(output),

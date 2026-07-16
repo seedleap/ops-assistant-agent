@@ -53,7 +53,7 @@ test("each Agent Profile owns its prompt, tools and runtime policy", () => {
 
   const inventor = resolveAgentProfileById(config, "idea-inventor");
   assert.equal(inventor.prompt.version, "idea-workflow-v2");
-  assert.equal(inventor.traceName, "idea-workflow-invent");
+  assert.equal(inventor.traceName, "idea");
   assert.deepEqual(inventor.toolNames, []);
   assert.equal(inventor.runtime.maxTurns, 2);
 });

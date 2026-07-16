@@ -102,7 +102,7 @@ JWT 模式下，token 的 `sub` 必须与 `userId` 一致。
 
 默认图片保存在 `DATA_DIR/idea-images/`。设置 `IDEA_ASSET_STORAGE=s3`、`IDEA_ASSET_S3_BUCKET`、`IDEA_ASSET_S3_PREFIX` 后上传 S3；设置 `IDEA_ASSET_CDN_BASE_URL` 后返回 CDN URL。S3 对象使用不可变缓存头，并按 user/project/workflow/idea 隔离 Key。
 
-启用现有 `LANGFUSE_ENABLED=true` 后，会额外产生 `idea-workflow` 总 trace；发明、审计、收敛和每张图片均有阶段 span。三个 Pi Agent trace 通过相同 `workflowId`、stage 和 attempt 标签关联，总 trace 记录 checkpoint attempt、图片失败数和最终状态，不记录图片 base64 或凭证。
+启用现有 `LANGFUSE_ENABLED=true` 后，每次任务只产生一个名为 `idea` 的 trace。发明、审计、收敛和图片生成是其阶段 span；每个 Pi Agent 的 turn、token 与 cost 继续作为对应阶段的子 observation，因此会自动汇总到同一个 trace。根 trace 记录 checkpoint attempt、图片失败数和最终状态，不记录图片 base64 或凭证。
 
 每个 Profile 独立声明：
 

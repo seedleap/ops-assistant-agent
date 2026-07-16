@@ -163,6 +163,12 @@ export interface AssistantRunInput {
     workflowId: string;
     stage: string;
     attempt: number;
+    parentSpanContext?: {
+      traceId: string;
+      spanId: string;
+      traceFlags: number;
+      isRemote?: boolean;
+    };
   };
   creatorUid?: string;
   model?: string;

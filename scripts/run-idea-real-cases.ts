@@ -118,8 +118,9 @@ const cases = [
 ] as const;
 
 const results: Array<Record<string, unknown>> = [];
+const caseLimit = Math.max(1, Math.min(cases.length, Number(process.env.REAL_CASE_LIMIT) || cases.length));
 try {
-  for (const item of cases) {
+  for (const item of cases.slice(0, caseLimit)) {
     const startedAt = Date.now();
     process.stdout.write(`CASE_START ${item.name}\n`);
     try {

@@ -400,7 +400,7 @@ export class IdeaWorkflow {
     for (let run = 1; run <= 2; run += 1) {
       const span = trace.startStage(stage, { profileId, run });
       try {
-        const output = await this.runStage(record, profileId, stage, prompt, run);
+        const output = await this.runStage(record, profileId, stage, prompt, run, span.parentSpanContext);
         const parsed = schema.parse(parseJsonOutput(output));
         validate?.(parsed);
         span.finish({ valid: true }, undefined, { run });
@@ -414,7 +414,14 @@ export class IdeaWorkflow {
     throw lastError;
   }
 
-  private async runStage(record: IdeaWorkflowRecord, profileId: AgentProfileId, stage: string, prompt: string, run: number): Promise<string> {
+  private async runStage(
+    record: IdeaWorkflowRecord,
+    profileId: AgentProfileId,
+    stage: string,
+    prompt: string,
+    run: number,
+    parentSpanContext?: NonNullable<NonNullable<Parameters<AgentRunner["run"]>[0]["traceContext"]>["parentSpanContext"]>,
+  ): Promise<string> {
     if (this.config.assistantDryRun) return this.dryRunStage(stage, prompt);
     const root = join(this.config.dataDir, "idea-workflows", record.id, `attempt-${record.attempt}`, `${stage}-${run}`);
     return this.agent.run({
@@ -428,7 +435,12 @@ export class IdeaWorkflow {
       sessionDir: join(root, "session"),
       continueSession: false,
       sessionMode: "new",
-      traceContext: { workflowId: record.id, stage, attempt: record.attempt },
+      traceContext: {
+        workflowId: record.id,
+        stage,
+        attempt: record.attempt,
+        ...(parentSpanContext ? { parentSpanContext } : {}),
+      },
     });
   }
 

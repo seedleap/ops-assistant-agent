@@ -16,7 +16,7 @@ const BASE_MODEL = {
 
 export const IDEA_INVENTOR_PROFILE = {
   runType: "interactive",
-  traceName: "idea-workflow-invent",
+  traceName: "idea",
   prompt: { version: "idea-workflow-v2", fileName: "idea-inventor.md" },
   model: BASE_MODEL,
   runtime: BASE_RUNTIME,
@@ -27,7 +27,7 @@ export const IDEA_INVENTOR_PROFILE = {
 
 export const IDEA_AUDITOR_PROFILE = {
   runType: "interactive",
-  traceName: "idea-workflow-audit",
+  traceName: "idea",
   prompt: { version: "idea-workflow-v2", fileName: "idea-auditor.md" },
   model: { ...BASE_MODEL, temperature: 0.2 },
   runtime: BASE_RUNTIME,
@@ -38,7 +38,7 @@ export const IDEA_AUDITOR_PROFILE = {
 
 export const IDEA_CONVERGER_PROFILE = {
   runType: "interactive",
-  traceName: "idea-workflow-converge",
+  traceName: "idea",
   prompt: { version: "idea-workflow-v2", fileName: "idea-converger.md" },
   model: { ...BASE_MODEL, temperature: 0.3 },
   runtime: BASE_RUNTIME,

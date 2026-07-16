@@ -75,7 +75,8 @@ export function createAgentRunTrace(
       `workflow-attempt:${input.traceContext.attempt}`,
     ] : []),
   ]);
-  const root = startObservation(profile.traceName, {
+  const parentSpanContext = input.traceContext?.parentSpanContext;
+  const root = startObservation(parentSpanContext ? "agent" : profile.traceName, {
     input: sanitizeTraceValue(input.prompt),
     metadata: {
       runId: input.runId,
@@ -87,16 +88,19 @@ export function createAgentRunTrace(
       thinkingLevel: profile.model.thinkingLevel,
       temperature: profile.model.temperature,
       maxTurns: profile.runtime.maxTurns,
-      ...(input.traceContext || {}),
+      ...(input.traceContext ? {
+        workflowId: input.traceContext.workflowId,
+        stage: input.traceContext.stage,
+        attempt: input.traceContext.attempt,
+      } : {}),
     },
-  }, { asType: "agent" });
-  root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_NAME, profile.traceName);
-  root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_USER_ID, input.userId);
-  root.otelSpan.setAttribute(
-    LangfuseOtelSpanAttributes.TRACE_SESSION_ID,
-    input.traceContext?.workflowId || input.imThreadId,
-  );
-  root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [...tags]);
+  }, { asType: "agent", ...(parentSpanContext ? { parentSpanContext } : {}) });
+  if (!parentSpanContext) {
+    root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_NAME, profile.traceName);
+    root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_USER_ID, input.userId);
+    root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_SESSION_ID, input.imThreadId);
+    root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [...tags]);
+  }
 
   let currentTurn: LangfuseGeneration | undefined;
   const toolSpans = new Map<string, LangfuseTool>();
@@ -171,7 +175,7 @@ export function createAgentRunTrace(
     extension,
     addTags(nextTags) {
       nextTags.filter(Boolean).forEach((tag) => tags.add(tag));
-      root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [...tags]);
+      if (!parentSpanContext) root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [...tags]);
     },
     async finish(output, stats, error) {
       currentTurn?.end();
@@ -180,7 +184,7 @@ export function createAgentRunTrace(
       if (error) tags.add("failed");
       else if (/^NO_OUTREACH:/i.test(output.trim())) tags.add("no-outreach");
       else tags.add("success");
-      root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [...tags]);
+      if (!parentSpanContext) root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [...tags]);
       root.update({
         output: sanitizeTraceValue(output),
         metadata: {
