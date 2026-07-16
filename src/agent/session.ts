@@ -11,7 +11,6 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import type { AppConfig } from "../config.js";
-import { createReadKnowledgeTool, knowledgeIndex } from "../integrations/knowledge/service.js";
 import { createOpsDataTools } from "../integrations/loopit/data-tools.js";
 import { RemoteOpsMcpClient } from "../integrations/loopit/mcp-client.js";
 import type { AssistantRunInput } from "../domain/types.js";
@@ -48,7 +47,6 @@ export class OpsSessionFactory {
     });
     this.tools = [
       ...createOpsDataTools(this.opsMcp),
-      createReadKnowledgeTool(config.skillsDir),
     ];
   }
 
@@ -137,8 +135,7 @@ export class OpsSessionFactory {
     const base = (await readFile(profile.prompt.file, "utf8")).trim();
     if (!base) throw new Error(`Agent Profile ${profile.id} has an empty system prompt: ${profile.prompt.file}`);
     // 系统提示和知识库目录在一轮会话内保持稳定，避免把易变信息放进缓存前缀。
-    const index = await knowledgeIndex(this.config.skillsDir).catch(() => "");
-    return `${base}${index ? `\n\n${index}` : ""}`;
+    return base;
   }
 
   private async materializeSkills(profile: AgentProfile, workDir: string): Promise<void> {

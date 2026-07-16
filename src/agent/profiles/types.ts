@@ -4,7 +4,7 @@ import type { RemoteSkillRef } from "../../integrations/skills/types.js";
 export type AgentRunType = "interactive" | "outreach";
 export type AgentThinkingLevel = "off" | "minimal" | "low" | "medium" | "high";
 /** Pi 内置只读工具；远程 Skill 物料化到会话目录后由它读取。 */
-export type AgentToolName = OpsMcpToolName | "read" | "read_knowledge";
+export type AgentToolName = OpsMcpToolName | "read";
 
 export interface AgentModelConfig {
   provider: string;

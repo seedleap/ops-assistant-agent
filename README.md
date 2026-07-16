@@ -10,7 +10,7 @@
 - 对话按 `userId + imThreadId` 持久化，可继续已有 Session。
 - 默认 Skill 按 Pi 规范使用 `<name>/SKILL.md`，会话启动时注册到 system prompt，由内置 `read` 工具按需加载。
 - 远程业务 Skill 从 S3 物料化到会话目录，同样由 Pi 内置 `read` 工具只读加载。
-- 运营知识库通过 `read_knowledge` 工具读取。
+- 默认 Skill 及其 `docs/` 参考资料通过 Pi 内置 `read` 工具读取。
 - Loopit 业务数据通过 Streamable HTTP MCP 访问，不在本项目内实现数据查询逻辑。
 - 可选 Langfuse trace，记录模型、工具、Token 和费用信息。
 
@@ -70,7 +70,7 @@ Profile 定义在 [`src/agent/profiles/`](src/agent/profiles/)；对应系统提
 
 - 模型与 thinking level；
 - 温度、最大轮次、超时和重试；
-- 可使用的 MCP / `read_knowledge` / `read` 工具；
+- 可使用的 MCP / `read` 工具；
 - 随 Profile 注册的默认 Skill；
 - 远程 Skill 的 `id + version`。
 

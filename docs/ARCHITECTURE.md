@@ -65,7 +65,7 @@ src/
 │   └── security.ts       # authentication boundary
 ├── integrations/
 │   ├── knowledge/
-│   │   └── service.ts    # managed knowledge and read_knowledge
+│   │   └── service.ts    # managed knowledge documents and admin CRUD
 │   └── loopit/
 │       ├── mcp-client.ts # remote Loopit data MCP client
 │       ├── data-tools.ts # Pi-facing Loopit tool definitions

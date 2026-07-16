@@ -81,7 +81,6 @@ test("health is public while API routes require a valid JWT", async () => {
       "query_work_consumption",
       "query_work_comments",
       "query_work_prompt",
-      "read_knowledge",
     ]);
 
     await request(app)
