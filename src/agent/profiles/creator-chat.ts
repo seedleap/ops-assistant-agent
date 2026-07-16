@@ -20,6 +20,7 @@ export const CREATOR_CHAT_PROFILE = {
     compactionEnabled: true,
   },
   toolNames: [
+    "read",
     "query_work_overview",
     "query_creator_works",
     "query_work_profile",
@@ -28,4 +29,5 @@ export const CREATOR_CHAT_PROFILE = {
     "query_work_prompt",
     "read_knowledge",
   ],
+  skills: [],
 } as const satisfies AgentProfileDefinition;

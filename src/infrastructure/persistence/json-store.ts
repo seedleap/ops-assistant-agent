@@ -5,12 +5,14 @@ import { Mutex } from "async-mutex";
 import type {
   AssistantRunRecord,
   ConversationRecord,
+  ConversationSessionRecord,
   ISODateString,
   MessageRecord,
   OutboxMessage,
   ScheduleRecord,
   StoreState,
 } from "../../domain/types.js";
+import type { ConversationArchive } from "./conversation-archive.js";
 
 const DEFAULT_THREAD_ID = "default";
 
@@ -25,6 +27,7 @@ function createId(prefix: string): string {
 function initialState(): StoreState {
   return {
     conversations: [],
+    sessions: [],
     messages: [],
     schedules: [],
     runs: [],
@@ -53,7 +56,16 @@ export class JsonStore {
       return store;
     }
     const raw = await readFile(filePath, "utf8");
-    return new JsonStore(filePath, JSON.parse(raw) as StoreState);
+    const parsed = JSON.parse(raw) as Partial<StoreState>;
+    // 兼容旧版 MVP 的 state.json：首次启动时补齐 sessions，不丢历史消息。
+    return new JsonStore(filePath, {
+      conversations: parsed.conversations ?? [],
+      sessions: parsed.sessions ?? [],
+      messages: parsed.messages ?? [],
+      schedules: parsed.schedules ?? [],
+      runs: parsed.runs ?? [],
+      outbox: parsed.outbox ?? [],
+    });
   }
 
   snapshot(): StoreState {
@@ -142,6 +154,76 @@ export class JsonStore {
     const conversation = await this.ensureConversation(userId, imThreadId);
     conversation.currentInteractiveSessionDir = sessionDir;
     conversation.updatedAt = nowIso();
+    await this.save();
+  }
+
+  getSession(id: string): ConversationSessionRecord | undefined {
+    return this.state.sessions.find((session) => session.id === id);
+  }
+
+  async createSession(input: Omit<ConversationSessionRecord, "status" | "createdAt" | "updatedAt"> & { createdAt?: Date }): Promise<ConversationSessionRecord> {
+    const now = nowIso(input.createdAt);
+    const session: ConversationSessionRecord = {
+      ...input,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.state.sessions.push(session);
+    const conversation = await this.ensureConversation(input.userId, input.imThreadId);
+    conversation.activeSessionId = session.id;
+    conversation.currentInteractiveSessionDir = input.type === "interactive" ? input.sessionDir : conversation.currentInteractiveSessionDir;
+    conversation.updatedAt = now;
+    await this.save();
+    return session;
+  }
+
+  async touchSession(sessionId: string, update: { runId?: string; summary?: string; close?: boolean }): Promise<void> {
+    const session = this.getSession(sessionId);
+    if (!session) return;
+    session.updatedAt = nowIso();
+    if (update.runId) session.lastRunId = update.runId;
+    if (update.summary !== undefined) session.summary = update.summary;
+    if (update.close) session.status = "closed";
+    await this.save();
+  }
+
+  buildRecoveryContext(userId: string, imThreadId: string, sessionId?: string, maxMessages = 12): string {
+    const conversation = this.getConversation(userId, imThreadId);
+    const session = sessionId ? this.getSession(sessionId) : undefined;
+    const messages = this.state.messages
+      .filter((message) => message.userId === userId && message.imThreadId === imThreadId)
+      .slice(-maxMessages);
+    const lines: string[] = [];
+    if (conversation?.summary) lines.push(`已有会话摘要：\n${conversation.summary}`);
+    if (session?.summary && session.summary !== conversation?.summary) lines.push(`上一段会话摘要：\n${session.summary}`);
+    if (messages.length > 0) {
+      lines.push(`最近消息：\n${messages.map((message) => `${message.role === "user" ? "用户" : "Agent"}: ${message.text}`).join("\n")}`);
+    }
+    return lines.join("\n\n").slice(0, 24_000);
+  }
+
+  async updateConversationSummary(userId: string, imThreadId: string, sessionId?: string): Promise<void> {
+    // 摘要只从最近可见消息重建，不能把旧 summary 再嵌套进去导致无限膨胀。
+    const recent = this.state.messages
+      .filter((message) => message.userId === userId && message.imThreadId === imThreadId)
+      .slice(-8);
+    const context = recent.length > 0
+      ? `最近消息：\n${recent.map((message) => `${message.role === "user" ? "用户" : "Agent"}: ${message.text}`).join("\n")}`
+      : "";
+    const conversation = await this.ensureConversation(userId, imThreadId);
+    conversation.summary = context.slice(0, 8_000);
+    conversation.updatedAt = nowIso();
+    if (sessionId) await this.touchSession(sessionId, { summary: conversation.summary });
+    else await this.save();
+  }
+
+  async restoreConversationArchive(archive: ConversationArchive): Promise<void> {
+    const existing = this.getConversation(archive.conversation.userId, archive.conversation.imThreadId);
+    if (existing) return;
+    this.state.conversations.push(archive.conversation);
+    this.state.sessions.push(...archive.sessions);
+    this.state.messages.push(...archive.messages);
     await this.save();
   }
 

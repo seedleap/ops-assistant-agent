@@ -1,8 +1,10 @@
 import type { OpsMcpToolName } from "../../integrations/loopit/mcp-client.js";
+import type { RemoteSkillRef } from "../../integrations/skills/types.js";
 
 export type AgentRunType = "interactive" | "outreach";
 export type AgentThinkingLevel = "off" | "minimal" | "low" | "medium" | "high";
-export type AgentToolName = OpsMcpToolName | "read_knowledge";
+/** Pi 内置只读工具；远程 Skill 物料化到会话目录后由它读取。 */
+export type AgentToolName = OpsMcpToolName | "read" | "read_knowledge";
 
 export interface AgentModelConfig {
   provider: string;
@@ -37,6 +39,8 @@ export interface AgentProfileDefinition {
   model: AgentModelConfig;
   runtime: AgentRuntimeConfig;
   toolNames: readonly AgentToolName[];
+  /** 远程维护的业务 Skill 版本；运行时按版本物料化，不从仓库目录读取。 */
+  skills?: readonly RemoteSkillRef[];
 }
 
 /** Fully resolved Profile passed to the Pi runtime. */

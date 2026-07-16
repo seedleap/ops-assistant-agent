@@ -32,6 +32,7 @@ const PROFILE: AgentProfile = {
   },
   toolNames: ["query_work_overview"],
   runType: "interactive",
+  skills: [],
 };
 
 test("model parameters extension patches Vertex payload without enabling thoughts", () => {

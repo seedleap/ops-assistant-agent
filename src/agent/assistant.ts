@@ -86,9 +86,14 @@ export class OpsAssistant {
   }
 
   private buildPrompt(input: AssistantRunInput): string {
+    const recovery = input.contextBootstrap?.trim()
+      ? `（这是从历史会话恢复的背景，仅用于理解上下文，不要复述：\n${input.contextBootstrap.trim()}）\n\n`
+      : "";
     const uid = input.creatorUid?.trim();
-    if (!uid) return input.prompt;
-    return `（背景信息，不用复述：当前创作者的 UID 是 ${uid}。当 ta 说“我的作品/我的游戏”等但没给出具体作品链接或 PID 时，用 query_creator_works 查询这个 UID 名下的作品。）\n\n${input.prompt}`;
+    const creator = uid
+      ? `（背景信息，不用复述：当前创作者的 UID 是 ${uid}。当 ta 说“我的作品/我的游戏”等但没给出具体作品链接或 PID 时，用 query_creator_works 查询这个 UID 名下的作品。）\n\n`
+      : "";
+    return `${recovery}${creator}${input.prompt}`;
   }
 
   private readLastAssistantMessage(session: AgentSession): { text: string; error?: string } {

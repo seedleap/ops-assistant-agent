@@ -20,3 +20,30 @@ test("JsonStore serializes concurrent writes", async () => {
     await rm(dataDir, { recursive: true, force: true });
   }
 });
+
+test("conversation recovery keeps messages after the Pi session directory is lost", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "ops-recovery-"));
+  try {
+    const store = await JsonStore.open(dataDir);
+    await store.recordUserMessage({ userId: "u1", imThreadId: "thread-1", text: "帮我设计一个创作者活动" });
+    const session = await store.createSession({
+      id: "sess_old",
+      userId: "u1",
+      imThreadId: "thread-1",
+      type: "interactive",
+      sessionDir: join(dataDir, "missing-session"),
+    });
+    await store.recordAssistantMessage({ userId: "u1", imThreadId: "thread-1", text: "可以先按目标人群和任务拆分", sourceRunId: "run-1" });
+    await store.updateConversationSummary("u1", "thread-1", session.id);
+
+    const recovery = store.buildRecoveryContext("u1", "thread-1", session.id);
+    assert.match(recovery, /创作者活动/);
+    assert.match(recovery, /目标人群/);
+
+    const reopened = await JsonStore.open(dataDir);
+    assert.equal(reopened.snapshot().sessions[0]?.id, "sess_old");
+    assert.match(reopened.getConversation("u1", "thread-1")?.summary ?? "", /创作者活动/);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
