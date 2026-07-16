@@ -6,11 +6,11 @@ import test from "node:test";
 import { SignJWT } from "jose";
 import pino from "pino";
 import request from "supertest";
-import { OpsAssistant } from "./agent/assistant.js";
-import { loadConfig } from "./config.js";
-import { OutreachScheduler } from "./scheduler.js";
-import { createApp } from "./server.js";
-import { JsonStore } from "./store.js";
+import { OpsAssistant } from "../agent/assistant.js";
+import { loadConfig } from "../config.js";
+import { OutreachScheduler } from "../infrastructure/scheduler/outreach-scheduler.js";
+import { createApp } from "./app.js";
+import { JsonStore } from "../infrastructure/persistence/json-store.js";
 
 const jwtSecret = "test-secret-that-is-at-least-32-characters";
 const logger = pino({ enabled: false });
@@ -104,6 +104,39 @@ test("health is public while API routes require a valid JWT", async () => {
       .get("/config/agent-profiles/unknown/system-prompt")
       .set("Authorization", `Bearer ${token}`)
       .expect(404, { error: "unknown agent profile" });
+
+    await request(app)
+      .post("/im/messages")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ userId: "u".repeat(129), text: "hello" })
+      .expect(400);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("failed non-stream runs are persisted as failed", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "ops-http-failure-"));
+  try {
+    const config = loadConfig({ NODE_ENV: "test", ASSISTANT_DRY_RUN: "true", DATA_DIR: dataDir });
+    const store = await JsonStore.open(config.dataDir);
+    const assistant = {
+      run: async () => { throw new Error("forced failure"); },
+      close: async () => {},
+    } as unknown as OpsAssistant;
+    const scheduler = {
+      tick: async () => [],
+      start: () => {},
+      stop: () => {},
+    } as unknown as OutreachScheduler;
+    const app = createApp({ config, store, assistant, scheduler, logger });
+
+    await request(app)
+      .post("/im/messages")
+      .send({ userId: "u1", text: "hello", reply: true })
+      .expect(500);
+
+    assert.deepEqual(store.snapshot().runs.map((run) => run.status), ["failed"]);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }

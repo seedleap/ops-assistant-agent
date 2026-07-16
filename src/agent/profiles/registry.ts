@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import type { AppConfig } from "../../config.js";
-import type { AssistantRunInput } from "../../types.js";
+import type { AssistantRunInput } from "../../domain/types.js";
 import {
   AGENT_PROFILES,
   AGENT_PROFILE_IDS,
@@ -18,6 +18,7 @@ export function resolveAgentProfileById(
   id: AgentProfileId,
   modelIdOverride?: string,
 ): AgentProfile<AgentProfileId> {
+  // Profile 默认值来自代码，部署覆盖只允许修改模型参数和运行时限制。
   const definition = AGENT_PROFILES[id];
   const overrides = config.agentProfileOverrides[id];
   return {

@@ -29,9 +29,9 @@ export interface OpsMcpClientConfig {
   maxResponseBytes: number;
 }
 
-/**
- * Process-wide remote MCP connection for the read-only Loopit data service.
- * The connection is lazy so dry-run/local HTTP checks do not require the data service.
+/*
+ * 进程内只维护一个只读 Loopit MCP 连接，并按需建立。
+ * 这样 dry-run 和本地 HTTP 测试不需要依赖远程数据服务，首次真实查询时才校验工具清单。
  */
 export class RemoteOpsMcpClient implements OpsMcpToolCaller {
   private client?: Client;

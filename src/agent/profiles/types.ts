@@ -1,4 +1,4 @@
-import type { OpsMcpToolName } from "../../opsMcpClient.js";
+import type { OpsMcpToolName } from "../../integrations/loopit/mcp-client.js";
 
 export type AgentRunType = "interactive" | "outreach";
 export type AgentThinkingLevel = "off" | "minimal" | "low" | "medium" | "high";

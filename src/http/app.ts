@@ -3,19 +3,22 @@ import cors from "cors";
 import helmet from "helmet";
 import { pinoHttp } from "pino-http";
 import { rateLimit } from "express-rate-limit";
-import { dirname, join } from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { readFile } from "node:fs/promises";
 import type { Logger } from "pino";
 import { z } from "zod";
-import type { AppConfig } from "./config.js";
-import { queryLoopitData } from "./loopitDataGateway.js";
-import type { OpsAssistant } from "./agent/assistant.js";
-import { MODEL_OPTIONS } from "./agent/models.js";
-import { listAgentProfiles, resolveAgentProfileById } from "./agent/profiles/registry.js";
-import { isAgentProfileId, type AgentProfileId } from "./agent/profiles/catalog.js";
-import type { OutreachScheduler } from "./scheduler.js";
-import { createId, DEFAULT_THREAD_ID, JsonStore } from "./store.js";
-import { createAuthentication } from "./http/security.js";
+import type { AppConfig } from "../config.js";
+import { queryLoopitData } from "../integrations/loopit/local-gateway.js";
+import type { OpsAssistant } from "../agent/assistant.js";
+import { MODEL_OPTIONS } from "../agent/models.js";
+import { listAgentProfiles, resolveAgentProfileById } from "../agent/profiles/registry.js";
+import { isAgentProfileId, type AgentProfileId } from "../agent/profiles/catalog.js";
+import type { OutreachScheduler } from "../infrastructure/scheduler/outreach-scheduler.js";
+import { createId, DEFAULT_THREAD_ID, JsonStore } from "../infrastructure/persistence/json-store.js";
+import { createAuthentication } from "../http/security.js";
+import { KeyedMutex } from "../concurrency/keyedMutex.js";
+import { writeFileAtomic } from "../runtime/atomic-file.js";
+import { conversationKey, conversationWorkDir } from "../runtime/paths.js";
 import {
   deleteDoc,
   isCollection,
@@ -24,7 +27,7 @@ import {
   listDocs,
   readDoc,
   writeDoc,
-} from "./knowledge.js";
+} from "../integrations/knowledge/service.js";
 
 export interface AppDependencies {
   config: AppConfig;
@@ -34,8 +37,13 @@ export interface AppDependencies {
   logger: Logger;
 }
 
+/*
+ * 这里只负责 HTTP 协议层：解析请求、鉴权、返回响应。
+ * 聊天运行、会话持久化和调度决策仍由下层对象完成，避免路由直接实现业务规则。
+ */
 export function createApp({ config, store, assistant, scheduler, logger }: AppDependencies): express.Express {
 const app = express();
+const conversationMutex = new KeyedMutex();
 app.disable("x-powered-by");
 if (config.trustProxyHops > 0) app.set("trust proxy", config.trustProxyHops);
 app.use(pinoHttp({ logger }));
@@ -49,19 +57,19 @@ app.use(express.json({ limit: "1mb" }));
 if (config.staticUiEnabled) app.use(express.static(config.publicDir));
 
 const messageSchema = z.object({
-  userId: z.string().min(1),
-  imThreadId: z.string().min(1).optional(),
-  text: z.string().min(1),
+  userId: z.string().trim().min(1).max(128),
+  imThreadId: z.string().trim().min(1).max(128).optional(),
+  text: z.string().trim().min(1).max(100_000),
   reply: z.boolean().optional().default(false),
-  creatorUid: z.string().min(1).optional(),
-  model: z.string().min(1).optional(),
+  creatorUid: z.string().trim().min(1).max(128).optional(),
+  model: z.string().trim().min(1).max(200).optional(),
 });
 
 const scheduleSchema = z.object({
-  userId: z.string().min(1),
-  imThreadId: z.string().min(1).optional(),
-  name: z.string().min(1),
-  prompt: z.string().min(1),
+  userId: z.string().trim().min(1).max(128),
+  imThreadId: z.string().trim().min(1).max(128).optional(),
+  name: z.string().trim().min(1).max(200),
+  prompt: z.string().trim().min(1).max(100_000),
   intervalMinutes: z.number().int().positive(),
   silentMinutes: z.number().int().nonnegative().optional(),
   enabled: z.boolean().optional(),
@@ -120,7 +128,7 @@ function profilePromptFile(id: AgentProfileId): string {
 
 async function sendSystemPrompt(id: AgentProfileId, res: express.Response, next: express.NextFunction): Promise<void> {
   try {
-    const content = await readFile(profilePromptFile(id), "utf8").catch(() => "");
+    const content = await readFile(profilePromptFile(id), "utf8");
     res.json({ profileId: id, content });
   } catch (err) {
     next(err);
@@ -136,8 +144,7 @@ async function saveSystemPrompt(
   try {
     const { content } = contentSchema.parse(req.body);
     const file = profilePromptFile(id);
-    await mkdir(dirname(file), { recursive: true });
-    await writeFile(file, content, "utf8");
+    await writeFileAtomic(file, content);
     res.json({ ok: true, profileId: id });
   } catch (err) {
     next(err);
@@ -260,16 +267,17 @@ app.delete("/skills/:collection/docs/:name", async (req, res, next) => {
 async function readJsonArray(file: string): Promise<unknown[]> {
   try {
     const parsed = JSON.parse(await readFile(file, "utf8"));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+    if (!Array.isArray(parsed)) throw new Error(`配置文件必须是数组: ${file}`);
+    return parsed;
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return [];
+    throw error;
   }
 }
 async function writeJsonArray(file: string, items: unknown[]): Promise<void> {
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(file, JSON.stringify(items, null, 2) + "\n", "utf8");
+  await writeFileAtomic(file, JSON.stringify(items, null, 2) + "\n");
 }
-const itemsSchema = z.object({ items: z.array(z.record(z.string(), z.any())) });
+const itemsSchema = z.object({ items: z.array(z.record(z.string(), z.unknown())).max(1_000) });
 
 app.get("/config/segments", async (_req, res, next) => {
   try {
@@ -316,63 +324,78 @@ app.post("/data/query", async (req, res, next) => {
 });
 
 app.post("/im/messages", async (req, res, next) => {
+  /*
+   * 非流式和流式接口都必须按会话串行。
+   * Pi 会复用同一个 session 目录，并发写入会导致上下文分叉或文件损坏。
+   */
   try {
     const input = messageSchema.parse(req.body);
     const imThreadId = input.imThreadId || DEFAULT_THREAD_ID;
-    const { conversation, previousLastUserMessageAt, message } = await store.recordUserMessage({
-      userId: input.userId,
-      imThreadId,
-      text: input.text,
+    await conversationMutex.runExclusive(conversationKey(input.userId, imThreadId), async () => {
+      const { conversation, previousLastUserMessageAt, message } = await store.recordUserMessage({
+        userId: input.userId,
+        imThreadId,
+        text: input.text,
+      });
+
+      if (!input.reply) {
+        res.json({ message, reply: null });
+        return;
+      }
+
+      const now = new Date();
+      const previousLastUserMs = previousLastUserMessageAt ? new Date(previousLastUserMessageAt).getTime() : 0;
+      const shouldStartNew = !conversation.currentInteractiveSessionDir ||
+        !previousLastUserMessageAt ||
+        (now.getTime() - previousLastUserMs) / 60_000 >= config.interactiveSessionTimeoutMinutes;
+      const runId = createId("run");
+      const sessionDir = shouldStartNew
+        ? join(config.dataDir, "pi-sessions", "interactive", runId)
+        : conversation.currentInteractiveSessionDir!;
+      const workDir = conversationWorkDir(config.dataDir, input.userId, imThreadId, "interactive");
+
+      await store.beginRun({
+        id: runId,
+        type: "interactive",
+        userId: input.userId,
+        imThreadId,
+        sessionDir,
+        input: input.text,
+      });
+
+      try {
+        const output = await assistant.run({
+          type: "interactive",
+          userId: input.userId,
+          imThreadId,
+          runId,
+          prompt: input.text,
+          workDir,
+          sessionDir,
+          continueSession: !shouldStartNew,
+          creatorUid: input.creatorUid,
+          model: input.model,
+        });
+        if (!output.trim()) throw new Error("Agent returned an empty response");
+
+        await store.finishRun(runId, { status: "completed", output });
+        await store.setInteractiveSessionDir(input.userId, imThreadId, sessionDir);
+        const assistantMessage = await store.recordAssistantMessage({
+          userId: input.userId,
+          imThreadId,
+          text: output,
+          sourceRunId: runId,
+        });
+
+        res.json({ message, reply: assistantMessage, sessionPolicy: shouldStartNew ? "new_session" : "continue_session" });
+      } catch (error) {
+        await store.finishRun(runId, {
+          status: "failed",
+          error: error instanceof Error ? error.message : String(error),
+        }).catch(() => {});
+        throw error;
+      }
     });
-
-    if (!input.reply) {
-      res.json({ message, reply: null });
-      return;
-    }
-
-    const now = new Date();
-    const previousLastUserMs = previousLastUserMessageAt ? new Date(previousLastUserMessageAt).getTime() : 0;
-    const shouldStartNew = !conversation.currentInteractiveSessionDir ||
-      !previousLastUserMessageAt ||
-      (now.getTime() - previousLastUserMs) / 60_000 >= config.interactiveSessionTimeoutMinutes;
-    const runId = createId("run");
-    const sessionDir = shouldStartNew
-      ? join(config.dataDir, "pi-sessions", "interactive", runId)
-      : conversation.currentInteractiveSessionDir!;
-    const workDir = join(config.dataDir, "workspaces", input.userId, imThreadId, "interactive");
-
-    await store.beginRun({
-      id: runId,
-      type: "interactive",
-      userId: input.userId,
-      imThreadId,
-      sessionDir,
-      input: input.text,
-    });
-
-    const output = await assistant.run({
-      type: "interactive",
-      userId: input.userId,
-      imThreadId,
-      runId,
-      prompt: input.text,
-      workDir,
-      sessionDir,
-      continueSession: !shouldStartNew,
-      creatorUid: input.creatorUid,
-      model: input.model,
-    });
-
-    await store.finishRun(runId, { status: "completed", output });
-    await store.setInteractiveSessionDir(input.userId, imThreadId, sessionDir);
-    const assistantMessage = await store.recordAssistantMessage({
-      userId: input.userId,
-      imThreadId,
-      text: output,
-      sourceRunId: runId,
-    });
-
-    res.json({ message, reply: assistantMessage, sessionPolicy: shouldStartNew ? "new_session" : "continue_session" });
   } catch (err) {
     next(err);
   }
@@ -389,18 +412,20 @@ app.post("/im/stream", async (req, res, next) => {
   }
 
   const imThreadId = input.imThreadId || DEFAULT_THREAD_ID;
-  const { conversation, previousLastUserMessageAt } = await store.recordUserMessage({
-    userId: input.userId,
-    imThreadId,
-    text: input.text,
-  });
-
+  // 先建立 SSE 响应，排队等待同会话任务时客户端仍能保持连接。
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders?.();
   res.on("error", () => {}); // 客户端刷新/断开时，别让 res 的 error 冒泡崩进程
+  await conversationMutex.runExclusive(conversationKey(input.userId, imThreadId), async () => {
+    const { conversation, previousLastUserMessageAt } = await store.recordUserMessage({
+      userId: input.userId,
+      imThreadId,
+      text: input.text,
+    });
+
   // 客户端断开也不影响：agent 仍会跑完并把回复存进 store（前端刷新后可捞回）
   const send = (event: unknown) => {
     if (res.writableEnded) return;
@@ -420,7 +445,7 @@ app.post("/im/stream", async (req, res, next) => {
   const sessionDir = shouldStartNew
     ? join(config.dataDir, "pi-sessions", "interactive", runId)
     : conversation.currentInteractiveSessionDir!;
-  const workDir = join(config.dataDir, "workspaces", input.userId, imThreadId, "interactive");
+  const workDir = conversationWorkDir(config.dataDir, input.userId, imThreadId, "interactive");
 
   await store.beginRun({
     id: runId,
@@ -465,6 +490,7 @@ app.post("/im/stream", async (req, res, next) => {
   } finally {
     res.end();
   }
+  });
 });
 
 app.post("/schedules", async (req, res, next) => {

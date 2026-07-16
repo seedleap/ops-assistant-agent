@@ -197,12 +197,26 @@ function normalizeGoogleVertexEnv(provider: string): void {
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppConfig {
+  /*
+   * 所有环境变量必须在进程启动时完成解析和约束检查。
+   * 生产环境的鉴权、CORS 和静态页面策略不能依赖调用方记得正确配置。
+   */
   const parsed = environmentSchema.safeParse(environment);
   if (!parsed.success) {
     throw new ConfigError(parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`));
   }
   const env = parsed.data;
   const authMode = env.API_AUTH_MODE || (env.NODE_ENV === "production" ? "jwt" : "none");
+  const corsOrigins = parseCorsOrigins(env.CORS_ORIGINS);
+  if (env.NODE_ENV === "production" && authMode !== "jwt") {
+    throw new ConfigError(["production requires API_AUTH_MODE=jwt"]);
+  }
+  if (env.NODE_ENV === "production" && env.STATIC_UI_ENABLED) {
+    throw new ConfigError(["STATIC_UI_ENABLED must be false in production"]);
+  }
+  if (env.NODE_ENV === "production" && corsOrigins === "*") {
+    throw new ConfigError(["CORS_ORIGINS must be an explicit origin list in production"]);
+  }
   if (authMode === "jwt" && !env.API_JWT_SECRET) {
     throw new ConfigError(["API_JWT_SECRET is required when API_AUTH_MODE=jwt"]);
   }
@@ -233,7 +247,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     logLevel: env.LOG_LEVEL,
     host: env.HOST,
     port: env.PORT,
-    corsOrigins: parseCorsOrigins(env.CORS_ORIGINS),
+    corsOrigins,
     trustProxyHops: env.TRUST_PROXY_HOPS,
     staticUiEnabled: env.STATIC_UI_ENABLED,
     auth: {

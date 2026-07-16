@@ -54,15 +54,34 @@ src/
 │   │   ├── registry.ts
 │   │   └── types.ts
 │   └── session.ts       # the only createAgentSession call site
+├── cli/
+│   └── loopit-data.ts    # local fixture query CLI
+├── concurrency/
+│   └── keyedMutex.ts    # same-conversation serialization
+├── domain/
+│   └── types.ts          # stable conversation, run, schedule and outbox types
+├── http/
+│   ├── app.ts            # dependency-injected Express application factory
+│   └── security.ts       # authentication boundary
+├── integrations/
+│   ├── knowledge/
+│   │   └── service.ts    # managed knowledge and read_knowledge
+│   └── loopit/
+│       ├── mcp-client.ts # remote Loopit data MCP client
+│       ├── data-tools.ts # Pi-facing Loopit tool definitions
+│       └── local-gateway.ts # local fixture query path
+├── infrastructure/
+│   ├── persistence/
+│   │   └── json-store.ts # current local MVP persistence
+│   └── scheduler/
+│       └── outreach-scheduler.ts # current local MVP scheduler
+├── runtime/
+│   ├── atomic-file.ts    # atomic config writes
+│   └── paths.ts          # filesystem-safe conversation workspaces
 ├── observability/
 │   ├── index.ts         # OTel/Langfuse initialization and shutdown
 │   ├── langfuse.ts      # Agent/turn/tool trace hierarchy
 │   └── sanitize.ts      # trace redaction and bounded payloads
-├── opsDataTools.ts      # Loopit data tool definitions
-├── knowledge.ts         # managed knowledge and read_knowledge
-├── scheduler.ts         # current local MVP scheduler
-├── store.ts             # current local MVP persistence
-├── server.ts            # dependency-injected Express application factory
 └── main.ts              # process composition, listen and shutdown
 ```
 
@@ -156,6 +175,8 @@ Use native `fetch`, `crypto`, `Date`, Node test runner and filesystem APIs. Do n
 ## Configuration and delivery
 
 - `src/config.ts` is the single environment boundary. Zod validates all runtime values before services are created.
+- Production configuration requires JWT auth, explicit CORS origins and a disabled static UI; local/test environments can remain lightweight.
+- User and thread IDs never become filesystem path segments. Conversation workspaces use stable hashed keys, and one conversation is serialized before Pi session reuse.
 - Invalid values fail fast with the exact environment variable name; production never silently falls back from malformed input.
 - The configured interactive and outreach models must both be present in `MODEL_WHITELIST`.
 - `tsconfig.json` is the strict editor/test configuration; `tsconfig.build.json` emits only production source to `dist/`.

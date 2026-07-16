@@ -5,7 +5,8 @@ import { ConfigError, loadConfig } from "./config.js";
 test("loadConfig parses explicit runtime values", () => {
   const config = loadConfig({
     NODE_ENV: "production",
-    API_AUTH_MODE: "none",
+    API_AUTH_MODE: "jwt",
+    API_JWT_SECRET: "test-secret-that-is-at-least-32-characters",
     HOST: "127.0.0.1",
     PORT: "9010",
     CORS_ORIGINS: "https://ops.loopit.example,https://admin.loopit.example",
@@ -44,8 +45,27 @@ test("loadConfig parses explicit runtime values", () => {
 
 test("loadConfig requires JWT authentication configuration in production", () => {
   assert.throws(
-    () => loadConfig({ NODE_ENV: "production", ASSISTANT_DRY_RUN: "true" }),
+    () => loadConfig({
+      NODE_ENV: "production",
+      API_AUTH_MODE: "jwt",
+      CORS_ORIGINS: "https://ops.loopit.example",
+      STATIC_UI_ENABLED: "false",
+      ASSISTANT_DRY_RUN: "true",
+    }),
     (error) => error instanceof ConfigError && error.message.includes("API_JWT_SECRET"),
+  );
+});
+
+test("loadConfig rejects insecure production overrides", () => {
+  assert.throws(
+    () => loadConfig({
+      NODE_ENV: "production",
+      API_AUTH_MODE: "none",
+      CORS_ORIGINS: "https://ops.loopit.example",
+      STATIC_UI_ENABLED: "false",
+      ASSISTANT_DRY_RUN: "true",
+    }),
+    (error) => error instanceof ConfigError && error.message.includes("API_AUTH_MODE=jwt"),
   );
 });
 
@@ -54,6 +74,8 @@ test("loadConfig requires the remote MCP service for a live production agent", (
     () => loadConfig({
       NODE_ENV: "production",
       API_JWT_SECRET: "test-secret-that-is-at-least-32-characters",
+      CORS_ORIGINS: "https://ops.loopit.example",
+      STATIC_UI_ENABLED: "false",
       ASSISTANT_DRY_RUN: "false",
     }),
     (error) => error instanceof ConfigError && error.message.includes("OPS_MCP_URL"),

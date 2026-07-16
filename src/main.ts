@@ -3,10 +3,11 @@ import { OpsAssistant } from "./agent/assistant.js";
 import { loadConfig } from "./config.js";
 import { createLogger } from "./logger.js";
 import { initObservability } from "./observability/index.js";
-import { OutreachScheduler } from "./scheduler.js";
-import { createApp } from "./server.js";
-import { JsonStore } from "./store.js";
+import { OutreachScheduler } from "./infrastructure/scheduler/outreach-scheduler.js";
+import { createApp } from "./http/app.js";
+import { JsonStore } from "./infrastructure/persistence/json-store.js";
 
+/* 启动文件只做依赖组装；具体业务由各模块负责，便于测试时替换依赖。 */
 const config = loadConfig();
 const logger = createLogger(config);
 const store = await JsonStore.open(config.dataDir);

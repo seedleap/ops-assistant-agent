@@ -3,10 +3,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import type { AppConfig } from "./config.js";
-import { OpsAssistant } from "./agent/assistant.js";
-import { OutreachScheduler } from "./scheduler.js";
-import { JsonStore } from "./store.js";
+import type { AppConfig } from "../../config.js";
+import { OpsAssistant } from "../../agent/assistant.js";
+import { OutreachScheduler } from "./outreach-scheduler.js";
+import { JsonStore } from "../persistence/json-store.js";
 import pino from "pino";
 
 const testLogger = pino({ enabled: false });

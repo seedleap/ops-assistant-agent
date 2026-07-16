@@ -220,13 +220,20 @@ curl -X POST http://localhost:8010/outbox/<messageId>/deliver
 ## 目录结构
 
 ```text
-bin/                    命令行入口
-config/agent-profiles/  各 Agent Profile 的可运营系统提示
-config/                 用户分层、定时任务配置
+bin/                    对外命令行包装入口
+config/                 Profile 提示词、用户分层、定时任务配置
+docs/                   架构、部署和业务边界文档
 public/                 本地聊天调试页面
-sample-data/            本地调试数据
-skills/                 智能体可读取的运营知识库
-src/                    服务、智能体、MCP client、调度器、工具定义
+sample-data/            本地 fixture 数据
+skills/                 Agent 可读取的运营知识库
+src/agent/              Pi Agent、Profile 和运行时扩展
+src/domain/             稳定的领域类型
+src/http/               Express 应用、路由和鉴权边界
+src/integrations/       Loopit MCP、本地数据和知识库适配器
+src/infrastructure/    本地持久化和调度实现
+src/observability/      Langfuse / OpenTelemetry
+src/runtime/            文件系统路径和原子写入等运行时能力
+src/cli/                本地数据查询命令
 ```
 
 `POST /data/query` 会读取 `sample-data/*.json`，仅用于本地离线调试。智能体正式查数据时只走远程 MCP。

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import test from "node:test";
-import { queryLoopitData } from "./loopitDataGateway.js";
+import { queryLoopitData } from "./local-gateway.js";
 
 const dataFile = join(process.cwd(), "sample-data", "loopit-data.json");
 
