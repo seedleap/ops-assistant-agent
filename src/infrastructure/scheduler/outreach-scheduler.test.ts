@@ -28,6 +28,15 @@ function testConfig(dataDir: string): AppConfig {
     defaultOutreachSilentMinutes: 60,
     interactiveSessionTimeoutMinutes: 60,
     assistantDryRun: true,
+    ideaImage: {
+      model: "gpt-image-1.5",
+      quality: "low",
+      timeoutMs: 90_000,
+    },
+    ideaAssets: {
+      storage: "local",
+      prefix: "ideas",
+    },
     modelWhitelist: ["google-vertex/gemini-3-flash-preview"],
     agentProfileOverrides: {},
     langfuse: {

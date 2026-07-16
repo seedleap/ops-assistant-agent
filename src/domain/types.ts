@@ -80,6 +80,61 @@ export interface OutboxMessage {
   deliveredAt?: ISODateString;
 }
 
+export interface IdeaImageResult {
+  status: "pending" | "completed" | "failed";
+  url?: string;
+  mimeType?: string;
+  model?: string;
+  storage?: "local" | "s3";
+  error?: string;
+}
+
+export interface GeneratedIdea {
+  id: string;
+  title: string;
+  summary: string;
+  mechanic: string;
+  playerAction: string;
+  decision: string;
+  loop: string;
+  failureRecovery: string;
+  whyFun: string;
+  prototypeTest: string;
+  gatePassed: boolean;
+  fatalReasons: string[];
+  imagePrompt: string;
+  image: IdeaImageResult;
+}
+
+export interface IdeaWorkflowRecord {
+  id: string;
+  idempotencyKey: string;
+  inputHash: string;
+  userId: string;
+  projectId?: string;
+  status: "queued" | "running" | "completed" | "completed_with_errors" | "failed" | "canceled";
+  stage: "queued" | "invent" | "audit" | "converge" | "images" | "complete";
+  input: Record<string, unknown>;
+  ideas: GeneratedIdea[];
+  checkpoints: {
+    invention?: unknown;
+    audits?: unknown;
+    convergence?: unknown;
+  };
+  attempt: number;
+  cancelRequested?: boolean;
+  metadata: {
+    workflowVersion: string;
+    promptVersion: string;
+    modelIds: string[];
+  };
+  error?: string;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  startedAt?: ISODateString;
+  completedAt?: ISODateString;
+}
+
 export interface StoreState {
   conversations: ConversationRecord[];
   sessions: ConversationSessionRecord[];
@@ -87,10 +142,13 @@ export interface StoreState {
   schedules: ScheduleRecord[];
   runs: AssistantRunRecord[];
   outbox: OutboxMessage[];
+  ideaWorkflows: IdeaWorkflowRecord[];
 }
 
 export interface AssistantRunInput {
   type: "interactive" | "outreach";
+  /** Internal workflow stages may select a dedicated Profile without exposing it on IM routes. */
+  profileId?: string;
   userId: string;
   imThreadId: string;
   runId: string;
@@ -101,6 +159,11 @@ export interface AssistantRunInput {
   sessionId?: string;
   sessionMode?: SessionMode;
   contextBootstrap?: string;
+  traceContext?: {
+    workflowId: string;
+    stage: string;
+    attempt: number;
+  };
   creatorUid?: string;
   model?: string;
 }

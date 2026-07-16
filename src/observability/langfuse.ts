@@ -69,6 +69,11 @@ export function createAgentRunTrace(
     profile.model.modelId,
     `prompt:${profile.prompt.version}`,
     `prompt-sha256:${promptHash}`,
+    ...(input.traceContext ? [
+      `workflow:${input.traceContext.workflowId}`,
+      `workflow-stage:${input.traceContext.stage}`,
+      `workflow-attempt:${input.traceContext.attempt}`,
+    ] : []),
   ]);
   const root = startObservation(profile.traceName, {
     input: sanitizeTraceValue(input.prompt),
@@ -82,11 +87,15 @@ export function createAgentRunTrace(
       thinkingLevel: profile.model.thinkingLevel,
       temperature: profile.model.temperature,
       maxTurns: profile.runtime.maxTurns,
+      ...(input.traceContext || {}),
     },
   }, { asType: "agent" });
   root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_NAME, profile.traceName);
   root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_USER_ID, input.userId);
-  root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_SESSION_ID, input.imThreadId);
+  root.otelSpan.setAttribute(
+    LangfuseOtelSpanAttributes.TRACE_SESSION_ID,
+    input.traceContext?.workflowId || input.imThreadId,
+  );
   root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [...tags]);
 
   let currentTurn: LangfuseGeneration | undefined;

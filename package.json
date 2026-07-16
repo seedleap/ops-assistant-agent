@@ -22,6 +22,7 @@
     "start": "node --enable-source-maps dist/main.js",
     "check": "pnpm run typecheck && pnpm test && pnpm run build",
     "query:data": "tsx src/cli/loopit-data.ts",
+    "validate:ideas:real": "tsx scripts/run-idea-real-cases.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test \"src/**/*.test.ts\""
   },

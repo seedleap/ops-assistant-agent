@@ -66,6 +66,44 @@ curl -X POST http://localhost:8010/im/messages \
 
 Profile 定义在 [`src/agent/profiles/`](src/agent/profiles/)；对应系统提示词在 [`config/agent-profiles/`](config/agent-profiles/)。
 
+## Idea 发散 Workflow
+
+`POST /ideas/generate` 使用三个互相隔离的 Pi Agent Profile，依次执行玩法发明、独立审计和规格化收敛；最终由服务端为每个入选 Idea 生成一张竖屏概念图。一次请求最多返回 8 个方向。接口要求携带 8–128 字符的 `Idempotency-Key`，创建成功后立即返回 `202`，客户端通过查询接口读取进度。
+
+```http
+POST /ideas/generate
+Idempotency-Key: u-1-project-1-submit-001
+```
+
+```json
+{
+  "userId": "u-1",
+  "projectId": "project-1",
+  "theme": "会移动的花园",
+  "audience": "休闲游戏用户",
+  "emotion": "轻松但需要快速判断",
+  "duration": "30 秒",
+  "notes": "优先单手操作",
+  "count": 4
+}
+```
+
+平台不作为 API 入参，workflow 内固定为 `Loopit 竖屏 Feed`。
+
+相同用户、相同幂等键和相同入参会返回原任务；相同幂等键换入参返回 `409`。每个 Agent 阶段都保存 checkpoint，进程启动时会恢复 `queued/running` 任务。响应中的每个 `idea` 同时包含玩法文本字段和 `image.url`。
+
+- `GET /ideas/:id?userId=<userId>`：查询状态和结果。
+- `POST /ideas/:id/retry`，body 为 `{ "userId": "..." }`：从最近 checkpoint 重试。
+- `POST /ideas/:id/cancel`，body 为 `{ "userId": "..." }`：请求取消。
+
+JWT 模式下，token 的 `sub` 必须与 `userId` 一致。
+
+图片生成优先读取 `IDEA_IMAGE_BASE_URL`、`IDEA_IMAGE_API_KEY`、`IDEA_IMAGE_MODEL`，也兼容现有的 `AZURE_IMAGE_BASE_URL`、`AZURE_IMAGE_API_KEY`、`AZURE_IMAGE_DEPLOYMENT`。未配置图片服务时文本结果仍会保存，workflow 状态为 `completed_with_errors`。
+
+默认图片保存在 `DATA_DIR/idea-images/`。设置 `IDEA_ASSET_STORAGE=s3`、`IDEA_ASSET_S3_BUCKET`、`IDEA_ASSET_S3_PREFIX` 后上传 S3；设置 `IDEA_ASSET_CDN_BASE_URL` 后返回 CDN URL。S3 对象使用不可变缓存头，并按 user/project/workflow/idea 隔离 Key。
+
+启用现有 `LANGFUSE_ENABLED=true` 后，会额外产生 `idea-workflow` 总 trace；发明、审计、收敛和每张图片均有阶段 span。三个 Pi Agent trace 通过相同 `workflowId`、stage 和 attempt 标签关联，总 trace 记录 checkpoint attempt、图片失败数和最终状态，不记录图片 base64 或凭证。
+
 每个 Profile 独立声明：
 
 - 模型与 thinking level；

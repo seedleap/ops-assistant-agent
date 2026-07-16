@@ -3,7 +3,27 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import type { IdeaWorkflowRecord } from "../../domain/types.js";
 import { JsonStore } from "./json-store.js";
+
+function queuedIdeaRecord(id: string, idempotencyKey: string): IdeaWorkflowRecord {
+  const now = new Date().toISOString();
+  return {
+    id,
+    idempotencyKey,
+    inputHash: id,
+    userId: "u1",
+    status: "queued",
+    stage: "queued",
+    input: {},
+    ideas: [],
+    checkpoints: {},
+    attempt: 0,
+    metadata: { workflowVersion: "test", promptVersion: "test", modelIds: [] },
+    createdAt: now,
+    updatedAt: now,
+  };
+}
 
 test("JsonStore serializes concurrent writes", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "ops-store-"));
@@ -16,6 +36,23 @@ test("JsonStore serializes concurrent writes", async () => {
 
     const reopened = await JsonStore.open(dataDir);
     assert.equal(reopened.snapshot().messages.length, 20);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("Idea workflow admission is atomic per user", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "ops-idea-admission-"));
+  try {
+    const store = await JsonStore.open(dataDir);
+    const results = await Promise.all([
+      store.createIdeaWorkflowIfAbsent(queuedIdeaRecord("idea-1", "submit-001")),
+      store.createIdeaWorkflowIfAbsent(queuedIdeaRecord("idea-2", "submit-002")),
+      store.createIdeaWorkflowIfAbsent(queuedIdeaRecord("idea-3", "submit-003")),
+    ]);
+    assert.equal(results.filter((result) => result.created).length, 2);
+    assert.equal(results.filter((result) => result.capacityExceeded).length, 1);
+    assert.equal(store.snapshot().ideaWorkflows.length, 2);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }

@@ -7,6 +7,7 @@ import type {
   ConversationRecord,
   ConversationSessionRecord,
   ISODateString,
+  IdeaWorkflowRecord,
   MessageRecord,
   OutboxMessage,
   ScheduleRecord,
@@ -32,6 +33,35 @@ function initialState(): StoreState {
     schedules: [],
     runs: [],
     outbox: [],
+    ideaWorkflows: [],
+  };
+}
+
+function normalizeIdeaWorkflow(record: Partial<IdeaWorkflowRecord>): IdeaWorkflowRecord {
+  const now = nowIso();
+  return {
+    id: record.id || createId("idea"),
+    idempotencyKey: record.idempotencyKey || `legacy:${record.id || createId("idea")}`,
+    inputHash: record.inputHash || "legacy",
+    userId: record.userId || "unknown",
+    projectId: record.projectId,
+    status: record.status || "failed",
+    stage: record.stage || "complete",
+    input: record.input || {},
+    ideas: record.ideas || [],
+    checkpoints: record.checkpoints || {},
+    attempt: record.attempt || 0,
+    cancelRequested: record.cancelRequested || false,
+    metadata: record.metadata || {
+      workflowVersion: "legacy",
+      promptVersion: "legacy",
+      modelIds: [],
+    },
+    error: record.error,
+    createdAt: record.createdAt || now,
+    updatedAt: record.updatedAt || now,
+    startedAt: record.startedAt,
+    completedAt: record.completedAt,
   };
 }
 
@@ -65,6 +95,7 @@ export class JsonStore {
       schedules: parsed.schedules ?? [],
       runs: parsed.runs ?? [],
       outbox: parsed.outbox ?? [],
+      ideaWorkflows: (parsed.ideaWorkflows ?? []).map((record) => normalizeIdeaWorkflow(record)),
     });
   }
 
@@ -72,13 +103,66 @@ export class JsonStore {
     return JSON.parse(JSON.stringify(this.state)) as StoreState;
   }
 
+  getIdeaWorkflow(id: string): IdeaWorkflowRecord | undefined {
+    return this.state.ideaWorkflows.find((workflow) => workflow.id === id);
+  }
+
+  async createIdeaWorkflow(record: IdeaWorkflowRecord): Promise<void> {
+    this.state.ideaWorkflows.push(record);
+    await this.save();
+  }
+
+  async createIdeaWorkflowIfAbsent(
+    record: IdeaWorkflowRecord,
+    maxActiveForUser = 2,
+  ): Promise<{ record: IdeaWorkflowRecord; created: boolean; capacityExceeded?: boolean }> {
+    return this.saveMutex.runExclusive(async () => {
+      const existing = this.state.ideaWorkflows.find((workflow) =>
+        workflow.userId === record.userId && workflow.idempotencyKey === record.idempotencyKey,
+      );
+      if (existing) return { record: JSON.parse(JSON.stringify(existing)) as IdeaWorkflowRecord, created: false };
+      const activeForUser = this.state.ideaWorkflows.filter((workflow) =>
+        workflow.userId === record.userId && ["queued", "running"].includes(workflow.status),
+      ).length;
+      if (activeForUser >= maxActiveForUser) {
+        return {
+          record: JSON.parse(JSON.stringify(record)) as IdeaWorkflowRecord,
+          created: false,
+          capacityExceeded: true,
+        };
+      }
+      this.state.ideaWorkflows.push(record);
+      await this.writeState();
+      return { record: JSON.parse(JSON.stringify(record)) as IdeaWorkflowRecord, created: true };
+    });
+  }
+
+  async updateIdeaWorkflow(
+    id: string,
+    update: Partial<Pick<IdeaWorkflowRecord,
+      "status" | "stage" | "ideas" | "checkpoints" | "error" | "attempt" |
+      "cancelRequested" | "startedAt" | "completedAt"
+    >>,
+  ): Promise<void> {
+    await this.saveMutex.runExclusive(async () => {
+      const workflow = this.getIdeaWorkflow(id);
+      if (!workflow) throw new Error(`Idea workflow not found: ${id}`);
+      Object.assign(workflow, update, { updatedAt: nowIso() });
+      await this.writeState();
+    });
+  }
+
   async save(): Promise<void> {
     await this.saveMutex.runExclusive(async () => {
-      await mkdir(dirname(this.filePath), { recursive: true });
-      const tmp = `${this.filePath}.tmp`;
-      await writeFile(tmp, JSON.stringify(this.state, null, 2));
-      await rename(tmp, this.filePath);
+      await this.writeState();
     });
+  }
+
+  private async writeState(): Promise<void> {
+    await mkdir(dirname(this.filePath), { recursive: true });
+    const tmp = `${this.filePath}.tmp`;
+    await writeFile(tmp, JSON.stringify(this.state, null, 2));
+    await rename(tmp, this.filePath);
   }
 
   getConversation(userId: string, imThreadId = DEFAULT_THREAD_ID): ConversationRecord | undefined {

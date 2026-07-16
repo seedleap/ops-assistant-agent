@@ -6,6 +6,7 @@ import type { AgentProfileOverrides } from "./agent/profiles/types.js";
 
 const CREATOR_CHAT_PROFILE = AGENT_PROFILES["creator-chat"];
 const CREATOR_OUTREACH_PROFILE = AGENT_PROFILES["creator-outreach"];
+const IDEA_INVENTOR_PROFILE = AGENT_PROFILES["idea-inventor"];
 
 const thinkingLevelSchema = z.enum(["off", "minimal", "low", "medium", "high"]);
 const optionalString = z.preprocess(
@@ -51,6 +52,24 @@ const environmentSchema = z.object({
   ASSISTANT_MAX_TURNS: positiveInteger(CREATOR_CHAT_PROFILE.runtime.maxTurns),
   ASSISTANT_TIMEOUT_MS: positiveInteger(CREATOR_CHAT_PROFILE.runtime.timeoutMs),
 
+  IDEA_MODEL_PROVIDER: optionalString,
+  IDEA_MODEL_ID: optionalString,
+  IDEA_THINKING_LEVEL: thinkingLevelSchema.default(IDEA_INVENTOR_PROFILE.model.thinkingLevel),
+  IDEA_TIMEOUT_MS: positiveInteger(IDEA_INVENTOR_PROFILE.runtime.timeoutMs),
+
+  IDEA_IMAGE_BASE_URL: optionalString.pipe(z.string().url().optional()),
+  IDEA_IMAGE_API_KEY: optionalString,
+  IDEA_IMAGE_MODEL: optionalString,
+  IDEA_IMAGE_QUALITY: z.enum(["low", "medium", "high"]).default("low"),
+  IDEA_IMAGE_TIMEOUT_MS: positiveInteger(90_000),
+  IDEA_ASSET_STORAGE: z.enum(["local", "s3"]).default("local"),
+  IDEA_ASSET_S3_BUCKET: optionalString,
+  IDEA_ASSET_S3_PREFIX: z.string().trim().min(1).default("ideas"),
+  IDEA_ASSET_CDN_BASE_URL: optionalString.pipe(z.string().url().optional()),
+  AZURE_IMAGE_BASE_URL: optionalString.pipe(z.string().url().optional()),
+  AZURE_IMAGE_API_KEY: optionalString,
+  AZURE_IMAGE_DEPLOYMENT: optionalString,
+
   OUTREACH_MODEL_PROVIDER: optionalString,
   OUTREACH_MODEL_ID: optionalString,
   OUTREACH_THINKING_LEVEL: thinkingLevelSchema.default(CREATOR_OUTREACH_PROFILE.model.thinkingLevel),
@@ -91,6 +110,13 @@ const environmentSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["LANGFUSE_ENABLED"],
       message: "LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY are required when tracing is enabled",
+    });
+  }
+  if (env.IDEA_ASSET_STORAGE === "s3" && !env.IDEA_ASSET_S3_BUCKET) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["IDEA_ASSET_S3_BUCKET"],
+      message: "IDEA_ASSET_S3_BUCKET is required when IDEA_ASSET_STORAGE=s3",
     });
   }
   if (env.NODE_ENV === "production" && !env.ASSISTANT_DRY_RUN && !env.OPS_MCP_URL) {
@@ -137,6 +163,19 @@ export interface AppConfig {
   defaultOutreachSilentMinutes: number;
   interactiveSessionTimeoutMinutes: number;
   assistantDryRun: boolean;
+  ideaImage: {
+    baseUrl?: string;
+    apiKey?: string;
+    model: string;
+    quality: "low" | "medium" | "high";
+    timeoutMs: number;
+  };
+  ideaAssets: {
+    storage: "local" | "s3";
+    bucket?: string;
+    prefix: string;
+    cdnBaseUrl?: string;
+  };
   modelWhitelist: string[];
   agentProfileOverrides: Partial<Record<AgentProfileId, AgentProfileOverrides>>;
   langfuse: LangfuseConfig;
@@ -208,7 +247,10 @@ function normalizeGoogleVertexEnv(provider: string): void {
     process.env.GCLOUD_PROJECT ||= project;
     process.env.GCLOUD_PROJECT_ID ||= project;
   }
-  const location = process.env.GOOGLE_CLOUD_LOCATION || process.env.GCLOUD_LOCATION;
+  // Pi's Vertex ADC resolver requires an explicit location even though Vertex
+  // itself accepts `global` for Gemini. Keep both common env names aligned.
+  const location = process.env.GOOGLE_CLOUD_LOCATION || process.env.GCLOUD_LOCATION ||
+    (provider === "google-vertex" ? "global" : undefined);
   if (location) {
     process.env.GOOGLE_CLOUD_LOCATION ||= location;
     process.env.GCLOUD_LOCATION ||= location;
@@ -247,14 +289,18 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   }
   const outreachProvider = env.OUTREACH_MODEL_PROVIDER || CREATOR_OUTREACH_PROFILE.model.provider;
   const outreachModelId = env.OUTREACH_MODEL_ID || CREATOR_OUTREACH_PROFILE.model.modelId;
+  const ideaProvider = env.IDEA_MODEL_PROVIDER || IDEA_INVENTOR_PROFILE.model.provider;
+  const ideaModelId = env.IDEA_MODEL_ID || IDEA_INVENTOR_PROFILE.model.modelId;
   const interactiveModel = `${env.ASSISTANT_MODEL_PROVIDER}/${env.ASSISTANT_MODEL_ID}`;
   const outreachModel = `${outreachProvider}/${outreachModelId}`;
+  const ideaModel = `${ideaProvider}/${ideaModelId}`;
   const modelWhitelist = parseModelWhitelist(env.MODEL_WHITELIST, [
     interactiveModel,
     outreachModel,
+    ideaModel,
     "google-vertex/gemini-3.1-flash-lite",
   ]);
-  const missingModels = [interactiveModel, outreachModel].filter((model) => !modelWhitelist.includes(model));
+  const missingModels = [interactiveModel, outreachModel, ideaModel].filter((model) => !modelWhitelist.includes(model));
   if (missingModels.length > 0) {
     throw new ConfigError(missingModels.map((model) => `MODEL_WHITELIST does not allow configured model ${model}`));
   }
@@ -262,6 +308,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   if (environment === process.env) {
     normalizeGoogleVertexEnv(env.ASSISTANT_MODEL_PROVIDER);
     if (outreachProvider !== env.ASSISTANT_MODEL_PROVIDER) normalizeGoogleVertexEnv(outreachProvider);
+    if (ideaProvider !== env.ASSISTANT_MODEL_PROVIDER) normalizeGoogleVertexEnv(ideaProvider);
   }
 
   return {
@@ -288,6 +335,19 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     defaultOutreachSilentMinutes: env.DEFAULT_OUTREACH_SILENT_MINUTES,
     interactiveSessionTimeoutMinutes: env.INTERACTIVE_SESSION_TIMEOUT_MINUTES,
     assistantDryRun: env.ASSISTANT_DRY_RUN,
+    ideaImage: {
+      baseUrl: env.IDEA_IMAGE_BASE_URL || env.AZURE_IMAGE_BASE_URL,
+      apiKey: env.IDEA_IMAGE_API_KEY || env.AZURE_IMAGE_API_KEY,
+      model: env.IDEA_IMAGE_MODEL || env.AZURE_IMAGE_DEPLOYMENT || "gpt-image-1.5",
+      quality: env.IDEA_IMAGE_QUALITY,
+      timeoutMs: env.IDEA_IMAGE_TIMEOUT_MS,
+    },
+    ideaAssets: {
+      storage: env.IDEA_ASSET_STORAGE,
+      bucket: env.IDEA_ASSET_S3_BUCKET,
+      prefix: env.IDEA_ASSET_S3_PREFIX,
+      cdnBaseUrl: env.IDEA_ASSET_CDN_BASE_URL,
+    },
     modelWhitelist,
     agentProfileOverrides: {
       "creator-chat": {
@@ -313,6 +373,18 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
           maxTurns: env.OUTREACH_MAX_TURNS,
           timeoutMs: env.OUTREACH_TIMEOUT_MS,
         },
+      },
+      "idea-inventor": {
+        model: { provider: ideaProvider, modelId: ideaModelId, thinkingLevel: env.IDEA_THINKING_LEVEL },
+        runtime: { timeoutMs: env.IDEA_TIMEOUT_MS },
+      },
+      "idea-auditor": {
+        model: { provider: ideaProvider, modelId: ideaModelId, thinkingLevel: env.IDEA_THINKING_LEVEL },
+        runtime: { timeoutMs: env.IDEA_TIMEOUT_MS },
+      },
+      "idea-converger": {
+        model: { provider: ideaProvider, modelId: ideaModelId, thinkingLevel: env.IDEA_THINKING_LEVEL },
+        runtime: { timeoutMs: env.IDEA_TIMEOUT_MS },
       },
     },
     langfuse: {

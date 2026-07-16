@@ -4,6 +4,7 @@ import type { AssistantRunInput } from "../../domain/types.js";
 import {
   AGENT_PROFILES,
   AGENT_PROFILE_IDS,
+  isAgentProfileId,
   type AgentProfileId,
 } from "./catalog.js";
 import type { AgentProfile } from "./types.js";
@@ -41,7 +42,15 @@ export function resolveAgentProfileById(
 }
 
 export function resolveAgentProfile(config: AppConfig, input: AssistantRunInput): AgentProfile {
-  const id = PROFILE_BY_RUN_TYPE[input.type];
+  const id = input.profileId && isAgentProfileId(input.profileId)
+    ? input.profileId
+    : PROFILE_BY_RUN_TYPE[input.type];
+  if (input.profileId && !isAgentProfileId(input.profileId)) {
+    throw new Error(`Unknown Agent Profile: ${input.profileId}`);
+  }
+  if (AGENT_PROFILES[id].runType !== input.type) {
+    throw new Error(`Agent Profile ${id} does not support ${input.type} runs`);
+  }
   return resolveAgentProfileById(config, id, input.type === "interactive" ? input.model : undefined);
 }
 

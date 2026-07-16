@@ -96,6 +96,20 @@ test("loadConfig requires Langfuse credentials when tracing is enabled", () => {
   );
 });
 
+test("loadConfig requires an S3 bucket for S3 idea assets", () => {
+  assert.throws(
+    () => loadConfig({ IDEA_ASSET_STORAGE: "s3" }),
+    (error) => error instanceof ConfigError && error.message.includes("IDEA_ASSET_S3_BUCKET"),
+  );
+  const config = loadConfig({
+    IDEA_ASSET_STORAGE: "s3",
+    IDEA_ASSET_S3_BUCKET: "idea-assets",
+    IDEA_ASSET_CDN_BASE_URL: "https://cdn.example.com",
+  });
+  assert.equal(config.ideaAssets.storage, "s3");
+  assert.equal(config.ideaAssets.bucket, "idea-assets");
+});
+
 test("loadConfig rejects profiles outside the model whitelist", () => {
   assert.throws(
     () => loadConfig({ MODEL_WHITELIST: "google-vertex/gemini-3.1-flash-lite" }),

@@ -6,6 +6,7 @@ import { rateLimit } from "express-rate-limit";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { AppConfig } from "../config.js";
@@ -16,6 +17,7 @@ import { MODEL_OPTIONS } from "../agent/models.js";
 import { listAgentProfiles, resolveAgentProfileById } from "../agent/profiles/registry.js";
 import { isAgentProfileId, type AgentProfileId } from "../agent/profiles/catalog.js";
 import type { OutreachScheduler } from "../infrastructure/scheduler/outreach-scheduler.js";
+import { IdeaWorkflowConflictError, type IdeaWorkflow } from "../ideas/workflow.js";
 import { createId, DEFAULT_THREAD_ID, JsonStore } from "../infrastructure/persistence/json-store.js";
 import { createAuthentication } from "../http/security.js";
 import { KeyedMutex } from "../concurrency/keyedMutex.js";
@@ -38,7 +40,10 @@ export interface AppDependencies {
   assistant: OpsAssistant;
   scheduler: OutreachScheduler;
   logger: Logger;
+  ideaWorkflow?: IdeaWorkflow;
 }
+
+class IdeaAuthorizationError extends Error {}
 
 interface InteractiveSessionDecision {
   sessionId: string;
@@ -86,7 +91,7 @@ async function prepareInteractiveSession(
  * 这里只负责 HTTP 协议层：解析请求、鉴权、返回响应。
  * 聊天运行、会话持久化和调度决策仍由下层对象完成，避免路由直接实现业务规则。
  */
-export function createApp({ config, store, assistant, scheduler, logger }: AppDependencies): express.Express {
+export function createApp({ config, store, assistant, scheduler, logger, ideaWorkflow }: AppDependencies): express.Express {
 const app = express();
 const conversationMutex = new KeyedMutex();
 const conversationArchive = new ConversationArchiveStore(config.conversationArchive ?? {
@@ -115,7 +120,7 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
   origin: config.corsOrigins,
   methods: ["GET", "POST", "PUT", "DELETE"],
-  allowedHeaders: ["Authorization", "Content-Type"],
+  allowedHeaders: ["Authorization", "Content-Type", "Idempotency-Key"],
 }));
 app.use(express.json({ limit: "1mb" }));
 if (config.staticUiEnabled) app.use(express.static(config.publicDir));
@@ -140,6 +145,30 @@ const scheduleSchema = z.object({
   enabled: z.boolean().optional(),
 });
 
+const ideaWorkflowSchema = z.object({
+  userId: z.string().trim().min(1).max(128),
+  projectId: z.string().trim().min(1).max(128).optional(),
+  theme: z.string().trim().min(1).max(2_000),
+  audience: z.string().trim().min(1).max(1_000),
+  emotion: z.string().trim().min(1).max(1_000),
+  duration: z.string().trim().min(1).max(200).default("30-60 秒"),
+  notes: z.string().trim().max(4_000).optional(),
+  forbidden: z.string().trim().max(2_000).optional(),
+  count: z.number().int().min(1).max(8).default(4),
+}).strict();
+const ideaActionSchema = z.object({ userId: z.string().trim().min(1).max(128) }).strict();
+
+function requestSubject(req: express.Request): string | undefined {
+  const auth = (req as express.Request & { auth?: { sub?: unknown } }).auth;
+  return typeof auth?.sub === "string" && auth.sub.trim() ? auth.sub : undefined;
+}
+
+function assertIdeaUser(req: express.Request, userId: string): void {
+  if (config.auth.mode !== "jwt") return;
+  const subject = requestSubject(req);
+  if (!subject || subject !== userId) throw new IdeaAuthorizationError("authenticated user does not match userId");
+}
+
 const dataQuerySchema = z.object({
   uid: z.string().min(1).optional(),
   pid: z.string().min(1).optional(),
@@ -163,7 +192,103 @@ app.use(rateLimit({
 app.use(createAuthentication(config));
 
 app.get("/state", (_req, res) => {
-  res.json(store.snapshot());
+  const { ideaWorkflows: _privateIdeaWorkflows, ...state } = store.snapshot();
+  res.json(state);
+});
+
+app.post("/ideas/generate", async (req, res, next) => {
+  try {
+    if (!ideaWorkflow) {
+      res.status(503).json({ error: "idea workflow is unavailable" });
+      return;
+    }
+    const input = ideaWorkflowSchema.parse(req.body);
+    assertIdeaUser(req, input.userId);
+    const idempotencyKey = req.get("Idempotency-Key") || "";
+    if (!idempotencyKey) {
+      res.status(400).json({ error: "Idempotency-Key header is required" });
+      return;
+    }
+    const result = await ideaWorkflow.start(input, idempotencyKey);
+    const terminal = ["completed", "completed_with_errors", "failed", "canceled"].includes(result.workflow.status);
+    res.status(result.created || !terminal ? 202 : 200).json({
+      workflow: result.workflow,
+      idempotentReplay: !result.created,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get("/ideas/assets/:filename", (req, res) => {
+  const filename = req.params.filename;
+  if (!/^[a-z0-9_-]+\.png$/i.test(filename)) {
+    res.status(400).json({ error: "invalid image filename" });
+    return;
+  }
+  if (config.auth.mode === "jwt") {
+    const path = `/ideas/assets/${filename}`;
+    const owner = store.snapshot().ideaWorkflows.find((workflow) =>
+      workflow.ideas.some((idea) => idea.image.url === path),
+    )?.userId;
+    if (!owner || requestSubject(req) !== owner) {
+      res.status(404).json({ error: "idea image not found" });
+      return;
+    }
+  }
+  res.sendFile(resolve(config.dataDir, "idea-images", filename), (error) => {
+    if (error && !res.headersSent) res.status(404).json({ error: "idea image not found" });
+  });
+});
+
+app.get("/ideas/:id", (req, res) => {
+  const workflow = store.getIdeaWorkflow(req.params.id);
+  if (!workflow) {
+    res.status(404).json({ error: "idea workflow not found" });
+    return;
+  }
+  const userId = typeof req.query.userId === "string" ? req.query.userId : "";
+  try {
+    assertIdeaUser(req, userId);
+  } catch {
+    res.status(404).json({ error: "idea workflow not found" });
+    return;
+  }
+  if (!userId || workflow.userId !== userId) {
+    res.status(404).json({ error: "idea workflow not found" });
+    return;
+  }
+  res.json({ workflow });
+});
+
+app.post("/ideas/:id/retry", async (req, res, next) => {
+  try {
+    if (!ideaWorkflow) {
+      res.status(503).json({ error: "idea workflow is unavailable" });
+      return;
+    }
+    const { userId } = ideaActionSchema.parse(req.body);
+    assertIdeaUser(req, userId);
+    const workflow = await ideaWorkflow.retry(req.params.id, userId);
+    res.status(202).json({ workflow });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post("/ideas/:id/cancel", async (req, res, next) => {
+  try {
+    if (!ideaWorkflow) {
+      res.status(503).json({ error: "idea workflow is unavailable" });
+      return;
+    }
+    const { userId } = ideaActionSchema.parse(req.body);
+    assertIdeaUser(req, userId);
+    const workflow = await ideaWorkflow.cancel(req.params.id, userId);
+    res.json({ workflow });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // 某个会话(userId+imThreadId)按时间顺序的消息——前端刷新后用来捞回没显示的 agent 回复
@@ -626,6 +751,14 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   }
   if (typeof err === "object" && err && "name" in err && err.name === "UnauthorizedError") {
     res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  if (err instanceof IdeaWorkflowConflictError) {
+    res.status(409).json({ error: err.message });
+    return;
+  }
+  if (err instanceof IdeaAuthorizationError) {
+    res.status(403).json({ error: err.message });
     return;
   }
   _req.log.error({ err }, "unhandled request error");
