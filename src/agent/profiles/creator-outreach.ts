@@ -28,5 +28,6 @@ export const CREATOR_OUTREACH_PROFILE = {
     "query_work_comments",
     "read_knowledge",
   ],
+  localSkills: ["creator-guide", "ops-activities"],
   skills: [],
 } as const satisfies AgentProfileDefinition;

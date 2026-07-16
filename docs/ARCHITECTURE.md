@@ -89,16 +89,18 @@ src/
 
 ### Remote business Skills
 
-业务 Skill 的事实来源是远程对象存储，不是仓库中的 `skills/` 目录。Profile
-通过不可变的 `id + version` 引用 Skill；会话创建时由 `RemoteSkillStore` 读取
-Manifest、下载 tgz、校验 SHA-256，再物料化到当前工作目录的
-`.pi/skills/<id>/`，供 Pi 的只读 `read` 工具使用。工作目录只是会话级副本，
+默认 Skill 与远程业务 Skill 都遵循 Pi 的标准目录约定：每个目录必须包含大写
+`SKILL.md`，运行时物料化到当前工作目录的 `.pi/skills/<name>/`。Profile
+通过 `localSkills` 声明镜像内置的默认 Skill，通过不可变的 `id + version` 引用远程
+Skill；远程 Skill 由 `RemoteSkillStore` 读取 Manifest、下载 tgz、校验 SHA-256。
+Pi `DefaultResourceLoader` 自动发现这些目录，把名称和描述注册到 system prompt；
+模型只在任务匹配时使用只读 `read` 工具加载全文。工作目录只是会话级副本，远程
 缓存路径也必须按 `id/version/sha256` 隔离。
 
 远程 Skill 只承载稳定的运营规则、生成规范和参考资料。Creator Score、活动
 资格、任务进度、奖励和 IM 动作仍由外部系统通过 MCP 提供；Agent 不得从 Skill
-文本推断这些事实。生产环境不启用本地 Skill fallback：远程版本不可用时，
-会话应明确失败并进入 trace，避免静默执行旧规则。
+文本推断这些事实。远程版本不可用时，会话应明确失败并进入 trace，避免静默执行
+旧规则；本地默认 Skill 仅作为随镜像发布的稳定知识，不替代外部业务事实。
 
 ### 文本会话恢复
 

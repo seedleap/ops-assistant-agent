@@ -39,6 +39,8 @@ export interface AgentProfileDefinition {
   model: AgentModelConfig;
   runtime: AgentRuntimeConfig;
   toolNames: readonly AgentToolName[];
+  /** 本地随镜像发布的默认 Skill 名称；运行时按 Profile 复制到 .pi/skills。 */
+  localSkills?: readonly string[];
   /** 远程维护的业务 Skill 版本；运行时按版本物料化，不从仓库目录读取。 */
   skills?: readonly RemoteSkillRef[];
 }
