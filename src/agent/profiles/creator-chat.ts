@@ -27,7 +27,7 @@ export const CREATOR_CHAT_PROFILE = {
     "query_work_consumption",
     "query_work_comments",
     "query_work_prompt",
-    "read_knowledge",
   ],
+  localSkills: ["creator-guide", "ops-activities"],
   skills: [],
 } as const satisfies AgentProfileDefinition;

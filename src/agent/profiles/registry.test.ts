@@ -34,6 +34,7 @@ test("each Agent Profile owns its prompt, tools and runtime policy", () => {
   assert.equal(chat.runtime.maxRetries, 2);
   assert.equal(chat.runtime.compactionEnabled, true);
   assert.ok(chat.toolNames.includes("query_work_prompt"));
+  assert.deepEqual(chat.localSkills, ["creator-guide", "ops-activities"]);
 
   const outreach = resolveAgentProfileById(config, "creator-outreach");
   assert.equal(outreach.prompt.file, "/tmp/ops-agent-prompts/creator-outreach.md");
@@ -41,6 +42,7 @@ test("each Agent Profile owns its prompt, tools and runtime policy", () => {
   assert.equal(outreach.runtime.timeoutMs, 45_000);
   assert.equal(outreach.runtime.compactionEnabled, false);
   assert.ok(!outreach.toolNames.includes("query_work_prompt"));
+  assert.deepEqual(outreach.localSkills, ["creator-guide", "ops-activities"]);
 });
 
 test("run input selects the Profile and only chat accepts an allowed model override", () => {

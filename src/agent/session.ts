@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
+import { cp, mkdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   createAgentSession,
   DefaultResourceLoader,
@@ -10,7 +11,6 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import type { AppConfig } from "../config.js";
-import { createReadKnowledgeTool, knowledgeIndex } from "../integrations/knowledge/service.js";
 import { createOpsDataTools } from "../integrations/loopit/data-tools.js";
 import { RemoteOpsMcpClient } from "../integrations/loopit/mcp-client.js";
 import type { AssistantRunInput } from "../domain/types.js";
@@ -47,7 +47,6 @@ export class OpsSessionFactory {
     });
     this.tools = [
       ...createOpsDataTools(this.opsMcp),
-      createReadKnowledgeTool(config.skillsDir),
     ];
   }
 
@@ -81,7 +80,9 @@ export class OpsSessionFactory {
       agentDir: this.config.dataDir,
       settingsManager,
       noExtensions: true,
-      noSkills: true,
+      // Skill 文件已按 Profile 物料化到 workDir/.pi/skills，交给 Pi 按标准策略
+      // 发现并注册到 system prompt；模型只在任务匹配时用 read 按需读取全文。
+      noSkills: false,
       noPromptTemplates: true,
       noThemes: true,
       noContextFiles: true,
@@ -134,14 +135,23 @@ export class OpsSessionFactory {
     const base = (await readFile(profile.prompt.file, "utf8")).trim();
     if (!base) throw new Error(`Agent Profile ${profile.id} has an empty system prompt: ${profile.prompt.file}`);
     // 系统提示和知识库目录在一轮会话内保持稳定，避免把易变信息放进缓存前缀。
-    const index = await knowledgeIndex(this.config.skillsDir).catch(() => "");
-    const skills = (profile.skills ?? []).length > 0
-      ? `\n\n# 远程业务 Skill\n按需读取以下只读文件，不要猜测未读取的规则：\n${(profile.skills ?? []).map((skill) => `- .pi/skills/${skill.id}/SKILL.md（${skill.version}）`).join("\n")}`
-      : "";
-    return `${base}${skills}${index ? `\n\n${index}` : ""}`;
+    return base;
   }
 
   private async materializeSkills(profile: AgentProfile, workDir: string): Promise<void> {
+    const localSkills = profile.localSkills ?? [];
+    const targetRoot = join(workDir, ".pi", "skills");
+    for (const name of localSkills) {
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) {
+        throw new Error(`invalid local skill name: ${name}`);
+      }
+      const source = join(this.config.skillsDir, name);
+      if (!existsSync(join(source, "SKILL.md"))) {
+        throw new Error(`local skill ${name} is missing SKILL.md`);
+      }
+      await cp(source, join(targetRoot, name), { recursive: true, force: true });
+    }
+
     const skills = profile.skills ?? [];
     if (skills.length === 0) return;
     if (!this.config.remoteSkills?.enabled) {

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
   DefaultResourceLoader,
+  formatSkillsForPrompt,
+  loadSkillsFromDir,
   type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
 import { createModelParametersExtension } from "./extensions.js";
@@ -74,6 +76,21 @@ test("latest Pi resource loader keeps explicit inline extensions when discovery 
     });
     await loader.reload();
     assert.deepEqual(loader.getExtensions().extensions.map((item) => item.path), ["<inline:model-parameters>"]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Pi registers the standard SKILL.md directory in the system skill index", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "ops-pi-skill-"));
+  try {
+    const skillDir = join(dir, "creator-guide");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(skillDir, "SKILL.md"), "---\nname: creator-guide\ndescription: creator guidance\n---\n\n# Guide\n");
+    const result = loadSkillsFromDir({ dir, source: "workspace" });
+    assert.equal(result.skills.length, 1);
+    assert.match(formatSkillsForPrompt(result.skills), /creator-guide/);
+    assert.match(formatSkillsForPrompt(result.skills), /Use the read tool/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

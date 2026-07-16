@@ -225,6 +225,7 @@ app.get("/config/agent-profiles", (_req, res) => {
     model: profile.model,
     runtime: profile.runtime,
     toolNames: profile.toolNames,
+    localSkills: profile.localSkills ?? [],
     skills: profile.skills ?? [],
   }));
   res.json({ profiles });

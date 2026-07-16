@@ -148,12 +148,15 @@ Agent 返回的目标契约应包括：
 
 ### 远程业务 Skill 运行策略
 
-业务 Skill 借鉴 Carmack 的动态注入链路，但本项目不把本地 `skills/` 目录作为事实来源：
+业务 Skill 借鉴 Carmack 的动态注入链路。默认 Skill 目录遵循 Pi 的标准命名：每个
+Skill 使用 `<name>/SKILL.md`，会话启动时复制到 `.pi/skills/` 并由 Pi 注册到
+system prompt；本地 `skills/` 是镜像内置的稳定知识来源，远程业务 Skill 则按版本
+从 S3 加载：
 
 1. Profile 只声明不可变的 `skill id + semver`；
 2. 会话创建时从 S3 读取 Manifest 和版本包；
 3. 校验包大小、SHA-256 和 `SKILL.md` 后，才物料化到当前会话的 `.pi/skills/`；
-4. Pi 通过只读 `read` 读取 Skill，缓存按 `id/version/sha256` 隔离；
+4. Pi 自动把 Skill 名称和描述注册到 system，模型通过只读 `read` 按需读取全文，缓存按 `id/version/sha256` 隔离；
 5. 远程包不可用时明确失败，不回退到仓库旧文件。
 
 Skill 只承载稳定的运营规则和生成规范；创作者数据、资格、进度、奖励和 IM 动作仍由外部服务通过 MCP 提供。
