@@ -1,14 +1,29 @@
 export type ISODateString = string;
+export type SessionMode = "continue" | "new";
 
 export interface ConversationRecord {
   userId: string;
   imThreadId: string;
   currentInteractiveSessionDir?: string;
+  activeSessionId?: string;
   summary?: string;
   lastUserMessageAt?: ISODateString;
   lastAssistantMessageAt?: ISODateString;
   createdAt: ISODateString;
   updatedAt: ISODateString;
+}
+
+export interface ConversationSessionRecord {
+  id: string;
+  userId: string;
+  imThreadId: string;
+  type: "interactive" | "outreach";
+  sessionDir: string;
+  status: "active" | "closed";
+  summary?: string;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  lastRunId?: string;
 }
 
 export interface MessageRecord {
@@ -44,6 +59,7 @@ export interface AssistantRunRecord {
   imThreadId: string;
   scheduleId?: string;
   sessionDir?: string;
+  sessionId?: string;
   input: string;
   output?: string;
   reason?: string;
@@ -66,6 +82,7 @@ export interface OutboxMessage {
 
 export interface StoreState {
   conversations: ConversationRecord[];
+  sessions: ConversationSessionRecord[];
   messages: MessageRecord[];
   schedules: ScheduleRecord[];
   runs: AssistantRunRecord[];
@@ -81,6 +98,9 @@ export interface AssistantRunInput {
   workDir: string;
   sessionDir: string;
   continueSession?: boolean;
+  sessionId?: string;
+  sessionMode?: SessionMode;
+  contextBootstrap?: string;
   creatorUid?: string;
   model?: string;
 }

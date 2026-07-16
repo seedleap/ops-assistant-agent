@@ -87,6 +87,29 @@ src/
 
 ## Agent profiles
 
+### Remote business Skills
+
+业务 Skill 的事实来源是远程对象存储，不是仓库中的 `skills/` 目录。Profile
+通过不可变的 `id + version` 引用 Skill；会话创建时由 `RemoteSkillStore` 读取
+Manifest、下载 tgz、校验 SHA-256，再物料化到当前工作目录的
+`.pi/skills/<id>/`，供 Pi 的只读 `read` 工具使用。工作目录只是会话级副本，
+缓存路径也必须按 `id/version/sha256` 隔离。
+
+远程 Skill 只承载稳定的运营规则、生成规范和参考资料。Creator Score、活动
+资格、任务进度、奖励和 IM 动作仍由外部系统通过 MCP 提供；Agent 不得从 Skill
+文本推断这些事实。生产环境不启用本地 Skill fallback：远程版本不可用时，
+会话应明确失败并进入 trace，避免静默执行旧规则。
+
+### 文本会话恢复
+
+文本运营不使用 Carmack 的 codebase snapshot 语义，而是分开保存
+`Conversation → Session → Run → Message`。Pi 的 Session JSONL 是近期上下文
+缓存；`state.json`（后续迁移到数据库）中的 Message 才是业务事实。显式
+`sessionMode=new|continue` 控制是否开启新的上下文，Session 文件丢失时用
+摘要和最近消息重建新 Session。启用 `CONVERSATION_ARCHIVE_ENABLED` 后，服务
+会把可见消息和摘要异步压缩成 gzip JSONL 上传 S3，启动新请求时可按
+`userId + imThreadId` 从归档补回本地状态；thinking 不进入消息归档。
+
 There are two profiles:
 
 - `creator-chat`: full read-only diagnostic tool set, interactive compaction enabled.
@@ -140,6 +163,12 @@ Pi receives `thinkingLevel` directly. Provider-specific payload parameters are i
 - OpenAI/OpenRouter requests receive top-level `temperature`.
 
 Do not add provider payload mutation elsewhere in the application.
+
+Gemini 运行约束：
+
+- 系统提示词和知识库索引在会话内保持稳定，动态 UID 只放在本轮用户提示中，尽量保留可复用的缓存前缀。
+- 只把可见文本写入响应、会话后续处理和 Langfuse；thinking parts 不作为业务上下文传递。
+- Pi 的 `input`、`cacheRead`、`cacheWrite` token 会同时记录，并按 `cacheRead / (input + cacheRead + cacheWrite)` 计算命中率，便于发现提示词漂移或缓存失效。
 
 ## Langfuse contract
 

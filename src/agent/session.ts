@@ -19,6 +19,7 @@ import type { Observability } from "../observability/index.js";
 import { createModelParametersExtension, createTurnLimitExtension } from "./extensions.js";
 import { OpsModelRegistry } from "./models.js";
 import type { AgentProfile } from "./profiles/types.js";
+import { RemoteSkillStore } from "../integrations/skills/index.js";
 
 export interface OpsSessionHandle {
   session: AgentSession;
@@ -30,12 +31,20 @@ export class OpsSessionFactory {
   private modelsPromise?: Promise<OpsModelRegistry>;
   private readonly tools: ToolDefinition[];
   private readonly opsMcp: RemoteOpsMcpClient;
+  private readonly remoteSkills: RemoteSkillStore;
 
   constructor(
     private readonly config: AppConfig,
     private readonly observability: Observability,
   ) {
     this.opsMcp = new RemoteOpsMcpClient(config.opsMcp);
+    this.remoteSkills = new RemoteSkillStore(config.remoteSkills ?? {
+      enabled: false,
+      prefix: "skills",
+      cacheDir: "./data/skill-cache",
+      timeoutMs: 120_000,
+      maxBytes: 20 * 1024 * 1024,
+    });
     this.tools = [
       ...createOpsDataTools(this.opsMcp),
       createReadKnowledgeTool(config.skillsDir),
@@ -53,6 +62,7 @@ export class OpsSessionFactory {
   async create(profile: AgentProfile, input: AssistantRunInput): Promise<OpsSessionHandle> {
     await mkdir(input.workDir, { recursive: true });
     await mkdir(input.sessionDir, { recursive: true });
+    await this.materializeSkills(profile, input.workDir);
 
     const models = await this.models();
     const model = models.resolve(profile.model.provider, profile.model.modelId);
@@ -123,7 +133,22 @@ export class OpsSessionFactory {
   private async systemPrompt(profile: AgentProfile): Promise<string> {
     const base = (await readFile(profile.prompt.file, "utf8")).trim();
     if (!base) throw new Error(`Agent Profile ${profile.id} has an empty system prompt: ${profile.prompt.file}`);
+    // 系统提示和知识库目录在一轮会话内保持稳定，避免把易变信息放进缓存前缀。
     const index = await knowledgeIndex(this.config.skillsDir).catch(() => "");
-    return index ? `${base}\n\n${index}` : base;
+    const skills = (profile.skills ?? []).length > 0
+      ? `\n\n# 远程业务 Skill\n按需读取以下只读文件，不要猜测未读取的规则：\n${(profile.skills ?? []).map((skill) => `- .pi/skills/${skill.id}/SKILL.md（${skill.version}）`).join("\n")}`
+      : "";
+    return `${base}${skills}${index ? `\n\n${index}` : ""}`;
+  }
+
+  private async materializeSkills(profile: AgentProfile, workDir: string): Promise<void> {
+    const skills = profile.skills ?? [];
+    if (skills.length === 0) return;
+    if (!this.config.remoteSkills?.enabled) {
+      throw new Error(`profile ${profile.id} declares remote skills but REMOTE_SKILLS_ENABLED=false`);
+    }
+    for (const skill of skills) {
+      await this.remoteSkills.materialize(skill, `${workDir}/.pi/skills/${skill.id}`);
+    }
   }
 }

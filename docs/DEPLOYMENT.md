@@ -70,7 +70,7 @@ with a backend-issued JWT and must preserve the client IP chain expected by
 
 ## Single-host Docker Compose
 
-Copy `.env.production.example` to a secret-managed `.env.production`, use an immutable image reference, and keep the service
+Inject the real `.env.production` through the secret manager, use an immutable image reference, and keep the service
 bound to loopback behind a TLS reverse proxy:
 
 ```bash

@@ -8,6 +8,8 @@ export interface TurnUsage {
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
+  /** 缓存读取 token / 本轮输入相关 token，用于观察 Gemini 缓存命中率。 */
+  cacheHitRate: number;
   totalTokens: number;
   costUsd: number;
   model?: string;
@@ -44,11 +46,14 @@ export function usageDelta(before: SessionStats, after: SessionStats, model?: st
   const outputTokens = delta("output");
   const cacheReadTokens = delta("cacheRead");
   const cacheWriteTokens = delta("cacheWrite");
+  // Pi 将未缓存输入、缓存读取和缓存写入分开统计；用同一口径计算命中率。
+  const promptTokens = inputTokens + cacheReadTokens + cacheWriteTokens;
   return {
     inputTokens,
     outputTokens,
     cacheReadTokens,
     cacheWriteTokens,
+    cacheHitRate: promptTokens > 0 ? cacheReadTokens / promptTokens : 0,
     totalTokens: delta("total") || inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens,
     costUsd: Math.max(0, after.cost - before.cost),
     model,

@@ -68,6 +68,15 @@ const environmentSchema = z.object({
 
   LOOPIT_DATA_FILE: z.string().trim().min(1).default("./sample-data/loopit-data.json"),
   SKILLS_DIR: z.string().trim().min(1).default("./skills"),
+  REMOTE_SKILLS_ENABLED: booleanString(false),
+  SKILL_S3_BUCKET: optionalString,
+  SKILL_S3_PREFIX: z.string().trim().min(1).default("skills"),
+  SKILL_CACHE_DIR: z.string().trim().min(1).default("./data/skill-cache"),
+  SKILL_FETCH_TIMEOUT_MS: positiveInteger(120_000),
+  SKILL_MAX_BYTES: positiveInteger(20 * 1024 * 1024),
+  CONVERSATION_ARCHIVE_ENABLED: booleanString(false),
+  CONVERSATION_ARCHIVE_BUCKET: optionalString,
+  CONVERSATION_ARCHIVE_PREFIX: z.string().trim().min(1).default("ops-conversations"),
   OPS_MCP_URL: optionalString.pipe(z.string().url().optional()),
   OPS_MCP_TOKEN: optionalString,
   OPS_MCP_TIMEOUT_MS: positiveInteger(120_000),
@@ -133,6 +142,19 @@ export interface AppConfig {
   langfuse: LangfuseConfig;
   loopitDataFile: string;
   skillsDir: string;
+  remoteSkills?: {
+    enabled: boolean;
+    bucket?: string;
+    prefix: string;
+    cacheDir: string;
+    timeoutMs: number;
+    maxBytes: number;
+  };
+  conversationArchive?: {
+    enabled: boolean;
+    bucket?: string;
+    prefix: string;
+  };
   opsMcp: {
     url?: string;
     token?: string;
@@ -303,6 +325,19 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     },
     loopitDataFile: resolve(env.LOOPIT_DATA_FILE),
     skillsDir: resolve(env.SKILLS_DIR),
+    remoteSkills: {
+      enabled: env.REMOTE_SKILLS_ENABLED,
+      bucket: env.SKILL_S3_BUCKET,
+      prefix: env.SKILL_S3_PREFIX,
+      cacheDir: resolve(env.SKILL_CACHE_DIR),
+      timeoutMs: env.SKILL_FETCH_TIMEOUT_MS,
+      maxBytes: env.SKILL_MAX_BYTES,
+    },
+    conversationArchive: {
+      enabled: env.CONVERSATION_ARCHIVE_ENABLED,
+      bucket: env.CONVERSATION_ARCHIVE_BUCKET,
+      prefix: env.CONVERSATION_ARCHIVE_PREFIX,
+    },
     opsMcp: {
       url: env.OPS_MCP_URL,
       token: env.OPS_MCP_TOKEN,

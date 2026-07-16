@@ -31,6 +31,7 @@ interface AssistantMessageLike {
 }
 
 function assistantText(message: AssistantMessageLike | undefined): string {
+  // 只记录可见文本；Gemini 的思考过程不能进入 trace 输出或后续上下文。
   if (!message || !Array.isArray(message.content)) return "";
   return message.content
     .filter((part) => part.type === "text" && typeof part.text === "string")
@@ -116,6 +117,10 @@ export function createAgentRunTrace(
             output: Number(usage.output || 0),
             cacheRead: Number(usage.cacheRead || 0),
             cacheWrite: Number(usage.cacheWrite || 0),
+            cacheHitRate: (() => {
+              const promptTokens = Number(usage.input || 0) + Number(usage.cacheRead || 0) + Number(usage.cacheWrite || 0);
+              return promptTokens > 0 ? Number(usage.cacheRead || 0) / promptTokens : 0;
+            })(),
             total: Number(usage.totalTokens || 0),
           },
           costDetails: { total: Number(usage.cost?.total || 0) },
@@ -177,6 +182,10 @@ export function createAgentRunTrace(
             outputTokens: stats.tokens.output,
             cacheReadTokens: stats.tokens.cacheRead,
             cacheWriteTokens: stats.tokens.cacheWrite,
+            cacheHitRate: (() => {
+              const promptTokens = stats.tokens.input + stats.tokens.cacheRead + stats.tokens.cacheWrite;
+              return promptTokens > 0 ? stats.tokens.cacheRead / promptTokens : 0;
+            })(),
             totalTokens: stats.tokens.total,
             costUsd: stats.cost,
             toolCalls: stats.toolCalls,

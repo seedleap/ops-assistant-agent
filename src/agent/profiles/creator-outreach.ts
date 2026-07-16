@@ -20,6 +20,7 @@ export const CREATOR_OUTREACH_PROFILE = {
     compactionEnabled: false,
   },
   toolNames: [
+    "read",
     "query_work_overview",
     "query_creator_works",
     "query_work_profile",
@@ -27,4 +28,5 @@ export const CREATOR_OUTREACH_PROFILE = {
     "query_work_comments",
     "read_knowledge",
   ],
+  skills: [],
 } as const satisfies AgentProfileDefinition;

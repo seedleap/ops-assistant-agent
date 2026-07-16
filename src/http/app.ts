@@ -3,11 +3,13 @@ import cors from "cors";
 import helmet from "helmet";
 import { pinoHttp } from "pino-http";
 import { rateLimit } from "express-rate-limit";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { AppConfig } from "../config.js";
+import type { ConversationRecord, SessionMode } from "../domain/types.js";
 import { queryLoopitData } from "../integrations/loopit/local-gateway.js";
 import type { OpsAssistant } from "../agent/assistant.js";
 import { MODEL_OPTIONS } from "../agent/models.js";
@@ -19,6 +21,7 @@ import { createAuthentication } from "../http/security.js";
 import { KeyedMutex } from "../concurrency/keyedMutex.js";
 import { writeFileAtomic } from "../runtime/atomic-file.js";
 import { conversationKey, conversationWorkDir } from "../runtime/paths.js";
+import { ConversationArchiveStore } from "../infrastructure/persistence/conversation-archive.js";
 import {
   deleteDoc,
   isCollection,
@@ -37,6 +40,48 @@ export interface AppDependencies {
   logger: Logger;
 }
 
+interface InteractiveSessionDecision {
+  sessionId: string;
+  sessionDir: string;
+  continueSession: boolean;
+  contextBootstrap?: string;
+}
+
+async function prepareInteractiveSession(
+  store: JsonStore,
+  config: AppConfig,
+  conversation: ConversationRecord,
+  userId: string,
+  imThreadId: string,
+  mode: SessionMode,
+  previousLastUserMessageAt?: string,
+): Promise<InteractiveSessionDecision> {
+  const stale = previousLastUserMessageAt
+    ? (Date.now() - new Date(previousLastUserMessageAt).getTime()) / 60_000 >= config.interactiveSessionTimeoutMinutes
+    : true;
+  const requestedNew = mode === "new" || stale || !conversation.currentInteractiveSessionDir;
+  const existingDir = conversation.currentInteractiveSessionDir;
+  const canContinue = !requestedNew && !!existingDir && existsSync(existingDir);
+  if (canContinue) {
+    const sessionId = conversation.activeSessionId || createId("sess");
+    if (!conversation.activeSessionId) {
+      await store.createSession({ id: sessionId, userId, imThreadId, type: "interactive", sessionDir: existingDir! });
+    }
+    return { sessionId, sessionDir: existingDir!, continueSession: true };
+  }
+
+  const sessionId = createId("sess");
+  const sessionDir = join(config.dataDir, "pi-sessions", "interactive", sessionId);
+  const contextBootstrap = store.buildRecoveryContext(userId, imThreadId, conversation.activeSessionId);
+  await store.createSession({ id: sessionId, userId, imThreadId, type: "interactive", sessionDir });
+  return {
+    sessionId,
+    sessionDir,
+    continueSession: false,
+    ...(contextBootstrap ? { contextBootstrap } : {}),
+  };
+}
+
 /*
  * 这里只负责 HTTP 协议层：解析请求、鉴权、返回响应。
  * 聊天运行、会话持久化和调度决策仍由下层对象完成，避免路由直接实现业务规则。
@@ -44,6 +89,25 @@ export interface AppDependencies {
 export function createApp({ config, store, assistant, scheduler, logger }: AppDependencies): express.Express {
 const app = express();
 const conversationMutex = new KeyedMutex();
+const conversationArchive = new ConversationArchiveStore(config.conversationArchive ?? {
+  enabled: false,
+  prefix: "ops-conversations",
+});
+const archiveConversation = async (userId: string, imThreadId: string): Promise<void> => {
+  const state = store.snapshot();
+  const conversation = state.conversations.find((item) => item.userId === userId && item.imThreadId === imThreadId);
+  if (!conversation) return;
+  await conversationArchive.put({
+    conversation,
+    sessions: state.sessions.filter((item) => item.userId === userId && item.imThreadId === imThreadId),
+    messages: state.messages.filter((item) => item.userId === userId && item.imThreadId === imThreadId),
+  });
+};
+const hydrateConversation = async (userId: string, imThreadId: string): Promise<void> => {
+  if (store.getConversation(userId, imThreadId)) return;
+  const archived = await conversationArchive.get(userId, imThreadId);
+  if (archived) await store.restoreConversationArchive(archived);
+};
 app.disable("x-powered-by");
 if (config.trustProxyHops > 0) app.set("trust proxy", config.trustProxyHops);
 app.use(pinoHttp({ logger }));
@@ -63,6 +127,7 @@ const messageSchema = z.object({
   reply: z.boolean().optional().default(false),
   creatorUid: z.string().trim().min(1).max(128).optional(),
   model: z.string().trim().min(1).max(200).optional(),
+  sessionMode: z.enum(["continue", "new"]).optional().default("continue"),
 });
 
 const scheduleSchema = z.object({
@@ -160,6 +225,7 @@ app.get("/config/agent-profiles", (_req, res) => {
     model: profile.model,
     runtime: profile.runtime,
     toolNames: profile.toolNames,
+    skills: profile.skills ?? [],
   }));
   res.json({ profiles });
 });
@@ -332,6 +398,7 @@ app.post("/im/messages", async (req, res, next) => {
     const input = messageSchema.parse(req.body);
     const imThreadId = input.imThreadId || DEFAULT_THREAD_ID;
     await conversationMutex.runExclusive(conversationKey(input.userId, imThreadId), async () => {
+      await hydrateConversation(input.userId, imThreadId);
       const { conversation, previousLastUserMessageAt, message } = await store.recordUserMessage({
         userId: input.userId,
         imThreadId,
@@ -343,15 +410,10 @@ app.post("/im/messages", async (req, res, next) => {
         return;
       }
 
-      const now = new Date();
-      const previousLastUserMs = previousLastUserMessageAt ? new Date(previousLastUserMessageAt).getTime() : 0;
-      const shouldStartNew = !conversation.currentInteractiveSessionDir ||
-        !previousLastUserMessageAt ||
-        (now.getTime() - previousLastUserMs) / 60_000 >= config.interactiveSessionTimeoutMinutes;
       const runId = createId("run");
-      const sessionDir = shouldStartNew
-        ? join(config.dataDir, "pi-sessions", "interactive", runId)
-        : conversation.currentInteractiveSessionDir!;
+      const session = await prepareInteractiveSession(
+        store, config, conversation, input.userId, imThreadId, input.sessionMode, previousLastUserMessageAt,
+      );
       const workDir = conversationWorkDir(config.dataDir, input.userId, imThreadId, "interactive");
 
       await store.beginRun({
@@ -359,7 +421,8 @@ app.post("/im/messages", async (req, res, next) => {
         type: "interactive",
         userId: input.userId,
         imThreadId,
-        sessionDir,
+        sessionDir: session.sessionDir,
+        sessionId: session.sessionId,
         input: input.text,
       });
 
@@ -371,23 +434,31 @@ app.post("/im/messages", async (req, res, next) => {
           runId,
           prompt: input.text,
           workDir,
-          sessionDir,
-          continueSession: !shouldStartNew,
+          sessionDir: session.sessionDir,
+          sessionId: session.sessionId,
+          sessionMode: session.continueSession ? "continue" : "new",
+          continueSession: session.continueSession,
+          contextBootstrap: session.contextBootstrap,
           creatorUid: input.creatorUid,
           model: input.model,
         });
         if (!output.trim()) throw new Error("Agent returned an empty response");
 
         await store.finishRun(runId, { status: "completed", output });
-        await store.setInteractiveSessionDir(input.userId, imThreadId, sessionDir);
+        await store.setInteractiveSessionDir(input.userId, imThreadId, session.sessionDir);
+        await store.touchSession(session.sessionId, { runId });
         const assistantMessage = await store.recordAssistantMessage({
           userId: input.userId,
           imThreadId,
           text: output,
           sourceRunId: runId,
         });
+        await store.updateConversationSummary(input.userId, imThreadId, session.sessionId);
+        void archiveConversation(input.userId, imThreadId).catch((error) => {
+          logger.warn({ err: error, userId: input.userId, imThreadId }, "conversation archive failed");
+        });
 
-        res.json({ message, reply: assistantMessage, sessionPolicy: shouldStartNew ? "new_session" : "continue_session" });
+        res.json({ message, reply: assistantMessage, sessionId: session.sessionId, sessionPolicy: session.continueSession ? "continue_session" : "new_session" });
       } catch (error) {
         await store.finishRun(runId, {
           status: "failed",
@@ -420,7 +491,8 @@ app.post("/im/stream", async (req, res, next) => {
   res.flushHeaders?.();
   res.on("error", () => {}); // 客户端刷新/断开时，别让 res 的 error 冒泡崩进程
   await conversationMutex.runExclusive(conversationKey(input.userId, imThreadId), async () => {
-    const { conversation, previousLastUserMessageAt } = await store.recordUserMessage({
+  await hydrateConversation(input.userId, imThreadId);
+  const { conversation, previousLastUserMessageAt } = await store.recordUserMessage({
       userId: input.userId,
       imThreadId,
       text: input.text,
@@ -436,15 +508,10 @@ app.post("/im/stream", async (req, res, next) => {
     }
   };
 
-  const now = new Date();
-  const previousLastUserMs = previousLastUserMessageAt ? new Date(previousLastUserMessageAt).getTime() : 0;
-  const shouldStartNew = !conversation.currentInteractiveSessionDir ||
-    !previousLastUserMessageAt ||
-    (now.getTime() - previousLastUserMs) / 60_000 >= config.interactiveSessionTimeoutMinutes;
   const runId = createId("run");
-  const sessionDir = shouldStartNew
-    ? join(config.dataDir, "pi-sessions", "interactive", runId)
-    : conversation.currentInteractiveSessionDir!;
+  const session = await prepareInteractiveSession(
+    store, config, conversation, input.userId, imThreadId, input.sessionMode, previousLastUserMessageAt,
+  );
   const workDir = conversationWorkDir(config.dataDir, input.userId, imThreadId, "interactive");
 
   await store.beginRun({
@@ -452,7 +519,8 @@ app.post("/im/stream", async (req, res, next) => {
     type: "interactive",
     userId: input.userId,
     imThreadId,
-    sessionDir,
+    sessionDir: session.sessionDir,
+    sessionId: session.sessionId,
     input: input.text,
   });
   send({ type: "start", runId });
@@ -466,8 +534,11 @@ app.post("/im/stream", async (req, res, next) => {
         runId,
         prompt: input.text,
         workDir,
-        sessionDir,
-        continueSession: !shouldStartNew,
+        sessionDir: session.sessionDir,
+        sessionId: session.sessionId,
+        sessionMode: session.continueSession ? "continue" : "new",
+        continueSession: session.continueSession,
+        contextBootstrap: session.contextBootstrap,
         creatorUid: input.creatorUid,
         model: input.model,
       },
@@ -475,12 +546,17 @@ app.post("/im/stream", async (req, res, next) => {
     );
 
     await store.finishRun(runId, { status: "completed", output });
-    await store.setInteractiveSessionDir(input.userId, imThreadId, sessionDir);
+    await store.setInteractiveSessionDir(input.userId, imThreadId, session.sessionDir);
     const assistantMessage = await store.recordAssistantMessage({
       userId: input.userId,
       imThreadId,
       text: output,
       sourceRunId: runId,
+    });
+    await store.touchSession(session.sessionId, { runId });
+    await store.updateConversationSummary(input.userId, imThreadId, session.sessionId);
+    void archiveConversation(input.userId, imThreadId).catch((error) => {
+      logger.warn({ err: error, userId: input.userId, imThreadId }, "conversation archive failed");
     });
     send({ type: "done", reply: assistantMessage });
   } catch (err) {
