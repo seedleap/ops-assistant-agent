@@ -10,7 +10,7 @@ import type {
   OutboxMessage,
   ScheduleRecord,
   StoreState,
-} from "./types.js";
+} from "../../domain/types.js";
 
 const DEFAULT_THREAD_ID = "default";
 
@@ -32,6 +32,10 @@ function initialState(): StoreState {
   };
 }
 
+/*
+ * JsonStore 是单进程 MVP 存储，不承担多副本一致性。
+ * 每次变更都通过互斥锁和临时文件替换，保证并发写入不会互相覆盖或留下半截 JSON。
+ */
 export class JsonStore {
   private readonly saveMutex = new Mutex();
 

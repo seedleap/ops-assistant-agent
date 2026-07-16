@@ -197,6 +197,10 @@ function normalizeGoogleVertexEnv(provider: string): void {
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppConfig {
+  /*
+   * 所有环境变量必须在进程启动时完成解析和约束检查。
+   * 生产环境的鉴权、CORS 和静态页面策略不能依赖调用方记得正确配置。
+   */
   const parsed = environmentSchema.safeParse(environment);
   if (!parsed.success) {
     throw new ConfigError(parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`));

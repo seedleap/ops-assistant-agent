@@ -21,7 +21,7 @@
     "build": "pnpm run clean && tsc -p tsconfig.build.json",
     "start": "node --enable-source-maps dist/main.js",
     "check": "pnpm run typecheck && pnpm test && pnpm run build",
-    "query:data": "tsx src/loopitDataCli.ts",
+    "query:data": "tsx src/cli/loopit-data.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test \"src/**/*.test.ts\""
   },

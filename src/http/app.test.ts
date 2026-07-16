@@ -6,11 +6,11 @@ import test from "node:test";
 import { SignJWT } from "jose";
 import pino from "pino";
 import request from "supertest";
-import { OpsAssistant } from "./agent/assistant.js";
-import { loadConfig } from "./config.js";
-import { OutreachScheduler } from "./scheduler.js";
-import { createApp } from "./server.js";
-import { JsonStore } from "./store.js";
+import { OpsAssistant } from "../agent/assistant.js";
+import { loadConfig } from "../config.js";
+import { OutreachScheduler } from "../infrastructure/scheduler/outreach-scheduler.js";
+import { createApp } from "./app.js";
+import { JsonStore } from "../infrastructure/persistence/json-store.js";
 
 const jwtSecret = "test-secret-that-is-at-least-32-characters";
 const logger = pino({ enabled: false });

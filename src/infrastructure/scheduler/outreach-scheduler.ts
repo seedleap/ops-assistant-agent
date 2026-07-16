@@ -1,10 +1,10 @@
 import { join } from "node:path";
-import type { AppConfig } from "./config.js";
-import { createId, JsonStore } from "./store.js";
-import type { ConversationRecord, OutboxMessage, ScheduleRecord } from "./types.js";
-import { OpsAssistant } from "./agent/assistant.js";
+import type { AppConfig } from "../../config.js";
+import { createId, type JsonStore } from "../persistence/json-store.js";
+import type { ConversationRecord, OutboxMessage, ScheduleRecord } from "../../domain/types.js";
+import { OpsAssistant } from "../../agent/assistant.js";
 import type { Logger } from "pino";
-import { conversationWorkDir } from "./runtime/paths.js";
+import { conversationWorkDir } from "../../runtime/paths.js";
 
 function addMinutes(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60_000);
@@ -71,6 +71,10 @@ export class OutreachScheduler {
   }
 
   private async processSchedule(schedule: ScheduleRecord, now: Date): Promise<SchedulerTickResult> {
+    /*
+     * 触达先经过三道门：任务是否到期、是否已有同任务在运行、用户是否已离开静默窗口。
+     * 任意一项不满足都不调用模型，避免重复触达和无意义打扰。
+     */
     if (!schedule.enabled || new Date(schedule.nextRunAt).getTime() > now.getTime()) {
       return { scheduleId: schedule.id, action: "not_due", nextRunAt: schedule.nextRunAt };
     }

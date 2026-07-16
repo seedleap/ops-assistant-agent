@@ -1,6 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
-import type { OpsMcpCallResult, OpsMcpToolCaller, OpsMcpToolName } from "./opsMcpClient.js";
+import type { OpsMcpCallResult, OpsMcpToolCaller, OpsMcpToolName } from "./mcp-client.js";
 
 interface ToolResult {
   content: Array<{ type: "text"; text: string }>;

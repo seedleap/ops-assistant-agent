@@ -10,7 +10,7 @@ import type {
   SessionStats,
 } from "@earendil-works/pi-coding-agent";
 import type { AgentProfile } from "../agent/profiles/types.js";
-import type { AssistantRunInput } from "../types.js";
+import type { AssistantRunInput } from "../domain/types.js";
 import type { Observability } from "./index.js";
 import { errorMessage, sanitizeTraceValue } from "./sanitize.js";
 

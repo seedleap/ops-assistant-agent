@@ -54,20 +54,34 @@ src/
 │   │   ├── registry.ts
 │   │   └── types.ts
 │   └── session.ts       # the only createAgentSession call site
+├── cli/
+│   └── loopit-data.ts    # local fixture query CLI
 ├── concurrency/
 │   └── keyedMutex.ts    # same-conversation serialization
+├── domain/
+│   └── types.ts          # stable conversation, run, schedule and outbox types
+├── http/
+│   ├── app.ts            # dependency-injected Express application factory
+│   └── security.ts       # authentication boundary
+├── integrations/
+│   ├── knowledge/
+│   │   └── service.ts    # managed knowledge and read_knowledge
+│   └── loopit/
+│       ├── mcp-client.ts # remote Loopit data MCP client
+│       ├── data-tools.ts # Pi-facing Loopit tool definitions
+│       └── local-gateway.ts # local fixture query path
+├── infrastructure/
+│   ├── persistence/
+│   │   └── json-store.ts # current local MVP persistence
+│   └── scheduler/
+│       └── outreach-scheduler.ts # current local MVP scheduler
 ├── runtime/
-│   ├── atomicFile.ts     # atomic config writes
+│   ├── atomic-file.ts    # atomic config writes
 │   └── paths.ts          # filesystem-safe conversation workspaces
 ├── observability/
 │   ├── index.ts         # OTel/Langfuse initialization and shutdown
 │   ├── langfuse.ts      # Agent/turn/tool trace hierarchy
 │   └── sanitize.ts      # trace redaction and bounded payloads
-├── opsDataTools.ts      # Loopit data tool definitions
-├── knowledge.ts         # managed knowledge and read_knowledge
-├── scheduler.ts         # current local MVP scheduler
-├── store.ts             # current local MVP persistence
-├── server.ts            # dependency-injected Express application factory
 └── main.ts              # process composition, listen and shutdown
 ```
 

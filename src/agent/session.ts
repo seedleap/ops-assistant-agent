@@ -10,10 +10,10 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import type { AppConfig } from "../config.js";
-import { createReadKnowledgeTool, knowledgeIndex } from "../knowledge.js";
-import { createOpsDataTools } from "../opsDataTools.js";
-import { RemoteOpsMcpClient } from "../opsMcpClient.js";
-import type { AssistantRunInput } from "../types.js";
+import { createReadKnowledgeTool, knowledgeIndex } from "../integrations/knowledge/service.js";
+import { createOpsDataTools } from "../integrations/loopit/data-tools.js";
+import { RemoteOpsMcpClient } from "../integrations/loopit/mcp-client.js";
+import type { AssistantRunInput } from "../domain/types.js";
 import { createAgentRunTrace, type AgentRunTrace } from "../observability/langfuse.js";
 import type { Observability } from "../observability/index.js";
 import { createModelParametersExtension, createTurnLimitExtension } from "./extensions.js";
@@ -46,6 +46,10 @@ export class OpsSessionFactory {
     return this.opsMcp.close();
   }
 
+  /*
+   * 这里是应用接入 Pi 的唯一组合点。
+   * Profile 决定模型、提示词、工具和运行限制；本类只负责把它们转换成 Pi 的标准配置。
+   */
   async create(profile: AgentProfile, input: AssistantRunInput): Promise<OpsSessionHandle> {
     await mkdir(input.workDir, { recursive: true });
     await mkdir(input.sessionDir, { recursive: true });

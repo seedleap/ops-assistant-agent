@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCreatorWorksTool, createWorkOverviewTool } from "./opsDataTools.js";
-import type { OpsMcpToolCaller, OpsMcpToolName } from "./opsMcpClient.js";
+import { createCreatorWorksTool, createWorkOverviewTool } from "./data-tools.js";
+import type { OpsMcpToolCaller, OpsMcpToolName } from "./mcp-client.js";
 
 interface TestToolResult {
   content: Array<{ type: "text"; text: string }>;

@@ -5,7 +5,7 @@ import express from "express";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { OPS_MCP_TOOL_NAMES, RemoteOpsMcpClient } from "./opsMcpClient.js";
+import { OPS_MCP_TOOL_NAMES, RemoteOpsMcpClient } from "./mcp-client.js";
 
 test("remote MCP client authenticates, discovers the allowlist and calls a tool", async () => {
   const app = express();

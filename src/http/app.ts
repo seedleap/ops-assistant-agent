@@ -7,18 +7,18 @@ import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import type { Logger } from "pino";
 import { z } from "zod";
-import type { AppConfig } from "./config.js";
-import { queryLoopitData } from "./loopitDataGateway.js";
-import type { OpsAssistant } from "./agent/assistant.js";
-import { MODEL_OPTIONS } from "./agent/models.js";
-import { listAgentProfiles, resolveAgentProfileById } from "./agent/profiles/registry.js";
-import { isAgentProfileId, type AgentProfileId } from "./agent/profiles/catalog.js";
-import type { OutreachScheduler } from "./scheduler.js";
-import { createId, DEFAULT_THREAD_ID, JsonStore } from "./store.js";
-import { createAuthentication } from "./http/security.js";
-import { KeyedMutex } from "./concurrency/keyedMutex.js";
-import { writeFileAtomic } from "./runtime/atomicFile.js";
-import { conversationKey, conversationWorkDir } from "./runtime/paths.js";
+import type { AppConfig } from "../config.js";
+import { queryLoopitData } from "../integrations/loopit/local-gateway.js";
+import type { OpsAssistant } from "../agent/assistant.js";
+import { MODEL_OPTIONS } from "../agent/models.js";
+import { listAgentProfiles, resolveAgentProfileById } from "../agent/profiles/registry.js";
+import { isAgentProfileId, type AgentProfileId } from "../agent/profiles/catalog.js";
+import type { OutreachScheduler } from "../infrastructure/scheduler/outreach-scheduler.js";
+import { createId, DEFAULT_THREAD_ID, JsonStore } from "../infrastructure/persistence/json-store.js";
+import { createAuthentication } from "../http/security.js";
+import { KeyedMutex } from "../concurrency/keyedMutex.js";
+import { writeFileAtomic } from "../runtime/atomic-file.js";
+import { conversationKey, conversationWorkDir } from "../runtime/paths.js";
 import {
   deleteDoc,
   isCollection,
@@ -27,7 +27,7 @@ import {
   listDocs,
   readDoc,
   writeDoc,
-} from "./knowledge.js";
+} from "../integrations/knowledge/service.js";
 
 export interface AppDependencies {
   config: AppConfig;
@@ -37,6 +37,10 @@ export interface AppDependencies {
   logger: Logger;
 }
 
+/*
+ * 这里只负责 HTTP 协议层：解析请求、鉴权、返回响应。
+ * 聊天运行、会话持久化和调度决策仍由下层对象完成，避免路由直接实现业务规则。
+ */
 export function createApp({ config, store, assistant, scheduler, logger }: AppDependencies): express.Express {
 const app = express();
 const conversationMutex = new KeyedMutex();
@@ -320,6 +324,10 @@ app.post("/data/query", async (req, res, next) => {
 });
 
 app.post("/im/messages", async (req, res, next) => {
+  /*
+   * 非流式和流式接口都必须按会话串行。
+   * Pi 会复用同一个 session 目录，并发写入会导致上下文分叉或文件损坏。
+   */
   try {
     const input = messageSchema.parse(req.body);
     const imThreadId = input.imThreadId || DEFAULT_THREAD_ID;

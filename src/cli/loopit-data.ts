@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
-import { queryLoopitData, type LoopitCommentSort, type LoopitDataInclude, type LoopitDataQueryInput } from "./loopitDataGateway.js";
+import { queryLoopitData, type LoopitCommentSort, type LoopitDataInclude, type LoopitDataQueryInput } from "../integrations/loopit/local-gateway.js";
 
 const VALID_INCLUDES = new Set<LoopitDataInclude>(["projects", "profile", "consumption", "prompt", "comments"]);
 

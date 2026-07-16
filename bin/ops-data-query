@@ -5,4 +5,4 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 cd "${PROJECT_ROOT}"
-exec pnpm exec tsx src/loopitDataCli.ts "$@"
+exec pnpm exec tsx src/cli/loopit-data.ts "$@"

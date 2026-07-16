@@ -1,6 +1,6 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { AppConfig } from "../config.js";
-import type { AssistantRunInput } from "../types.js";
+import type { AssistantRunInput } from "../domain/types.js";
 import { disabledObservability, type Observability } from "../observability/index.js";
 import { forwardSessionEvent, usageDelta, type AssistantEvent, type AssistantEventHandler } from "./events.js";
 import { resolveAgentProfile } from "./profiles/registry.js";
