@@ -3,8 +3,9 @@ import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parse } from "dotenv";
 
+Object.assign(process.env, parse(await readFile(resolve(".env"), "utf8")));
 const envFile = process.env.REAL_CASE_ENV_FILE;
-if (envFile) {
+if (envFile && resolve(envFile) !== resolve(".env")) {
   Object.assign(process.env, parse(await readFile(resolve(envFile), "utf8")));
 }
 
@@ -30,8 +31,8 @@ if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && process.env.GOOGLE_CLOUD_SA_J
 const required = [
   "GOOGLE_CLOUD_PROJECT",
   "GOOGLE_APPLICATION_CREDENTIALS",
-  "AZURE_IMAGE_BASE_URL",
-  "AZURE_IMAGE_API_KEY",
+  "IDEA_IMAGE_BASE_URL",
+  "IDEA_IMAGE_API_KEY",
   "LANGFUSE_PUBLIC_KEY",
   "LANGFUSE_SECRET_KEY",
 ];

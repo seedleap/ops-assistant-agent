@@ -24,7 +24,7 @@ pnpm install
 pnpm dev
 ```
 
-本地直接使用项目根目录的 `.env`；测试和生产分别使用 `.env.test`、`.env.production`，这些文件中的 Langfuse 配置已与 Carmack 对齐。
+配置方式与 Carmack 一致：`.env` 是公共基线，测试使用 `.env + .env.test`，生产使用 `.env + .env.production`，后加载的环境文件覆盖同名配置。测试或容器启动时需要同时传入基础文件和对应环境覆盖文件。
 
 打开 <http://localhost:8010/> 可使用本地调试页面。
 
