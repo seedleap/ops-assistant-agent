@@ -5,7 +5,6 @@ dist/
 !.env.test
 !.env.production
 !.env.example
-!.env.*.example
 data/
 config/*-config.json
 config/*credential*.json
