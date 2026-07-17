@@ -4,6 +4,7 @@ import type { IdeaImageGenerator } from "../integrations/images/idea-image.js";
 import type { JsonStore } from "../infrastructure/persistence/json-store.js";
 import type { createIdeaWorkflowTrace } from "../observability/idea-workflow.js";
 import { errorMessage } from "../observability/sanitize.js";
+import { buildIdeaImagePrompt } from "./image-prompt.js";
 
 export class IdeaImagePipeline {
   constructor(
@@ -25,7 +26,7 @@ export class IdeaImagePipeline {
       while (cursor < ideas.length) {
         const { idea, index } = ideas[cursor++];
         throwIfCanceled();
-        const prompt = `Create a polished 9:16 vertical mobile game screenshot, not a poster. Show one active gameplay moment and communicate the mechanic visually. Player goal: ${idea.playerGoal}. Interaction pattern: ${idea.interactionPattern}. Mechanic: ${idea.mechanic}. Player action: ${idea.playerAction}. Game state: ${idea.gameState}. Decision: ${idea.decision}. Rules: ${idea.rules}. Feedback: ${idea.feedback}. Visual direction: ${idea.imagePrompt}. Clearly distinguish actionable targets, predictive signals, current state, and immediate gameplay feedback. Do not show a failure, reset, retry, game-over, or results screen. Do not add weapons, characters, written text, generic buttons, or unrelated objects unless explicitly required by the core gameplay.`;
+        const prompt = buildIdeaImagePrompt(idea);
         const span = trace.startImage(index, { ideaId: idea.id, prompt });
         try {
           const artifact = await this.generateWithRetry({

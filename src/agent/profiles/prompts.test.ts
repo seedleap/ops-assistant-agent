@@ -2,15 +2,18 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
+import { selectSystemPrompt } from "../prompt.js";
 import { AGENT_PROFILES } from "./catalog.js";
 
-async function readProfilePrompt(fileName: string): Promise<string> {
-  return readFile(join(process.cwd(), "config", "agent-profiles", fileName), "utf8");
+async function readProfilePrompt(fileName: string, section?: string): Promise<string> {
+  const source = await readFile(join(process.cwd(), "config", "agent-profiles", fileName), "utf8");
+  return selectSystemPrompt(source, section);
 }
 
 test("every Agent Profile points to a non-empty scenario prompt", async () => {
   for (const [id, profile] of Object.entries(AGENT_PROFILES)) {
-    const prompt = await readProfilePrompt(profile.prompt.fileName);
+    const section = "section" in profile.prompt ? profile.prompt.section : undefined;
+    const prompt = await readProfilePrompt(profile.prompt.fileName, section);
     assert.ok(prompt.trim().length > 500, `${id} prompt is unexpectedly short`);
     assert.match(prompt, /Instruction boundary/);
     assert.match(prompt, /未满 13 岁/);
@@ -51,9 +54,9 @@ test("creator outreach prompt preserves value gate and no-send contract", async 
 });
 
 test("idea workflow prompts preserve stage separation and JSON contracts", async () => {
-  const inventor = await readProfilePrompt("idea-inventor.md");
-  const auditor = await readProfilePrompt("idea-auditor.md");
-  const converger = await readProfilePrompt("idea-converger.md");
+  const inventor = await readProfilePrompt("idea.md", "idea-inventor");
+  const auditor = await readProfilePrompt("idea.md", "idea-auditor");
+  const converger = await readProfilePrompt("idea.md", "idea-converger");
 
   assert.match(inventor, /可证伪/);
   assert.match(inventor, /3 到 5 秒/);

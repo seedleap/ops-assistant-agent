@@ -53,6 +53,8 @@ test("each Agent Profile owns its prompt, tools and runtime policy", () => {
 
   const inventor = resolveAgentProfileById(config, "idea-inventor");
   assert.equal(inventor.prompt.version, "idea-workflow-v2");
+  assert.equal(inventor.prompt.file, "/tmp/ops-agent-prompts/idea.md");
+  assert.equal(inventor.prompt.section, "idea-inventor");
   assert.equal(inventor.traceName, "idea");
   assert.equal(inventor.model.provider, "azure-openai-responses");
   assert.equal(inventor.model.modelId, "gpt-5.5");

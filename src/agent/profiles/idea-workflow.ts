@@ -24,7 +24,7 @@ export const IDEA_IMAGE_CONFIG = {
 export const IDEA_INVENTOR_PROFILE = {
   runType: "interactive",
   traceName: "idea",
-  prompt: { version: "idea-workflow-v2", fileName: "idea-inventor.md" },
+  prompt: { version: "idea-workflow-v2", fileName: "idea.md", section: "idea-inventor" },
   model: BASE_MODEL,
   runtime: BASE_RUNTIME,
   toolNames: [],
@@ -35,7 +35,7 @@ export const IDEA_INVENTOR_PROFILE = {
 export const IDEA_AUDITOR_PROFILE = {
   runType: "interactive",
   traceName: "idea",
-  prompt: { version: "idea-workflow-v2", fileName: "idea-auditor.md" },
+  prompt: { version: "idea-workflow-v2", fileName: "idea.md", section: "idea-auditor" },
   model: BASE_MODEL,
   runtime: BASE_RUNTIME,
   toolNames: [],
@@ -46,7 +46,7 @@ export const IDEA_AUDITOR_PROFILE = {
 export const IDEA_CONVERGER_PROFILE = {
   runType: "interactive",
   traceName: "idea",
-  prompt: { version: "idea-workflow-v2", fileName: "idea-converger.md" },
+  prompt: { version: "idea-workflow-v2", fileName: "idea.md", section: "idea-converger" },
   model: BASE_MODEL,
   runtime: BASE_RUNTIME,
   toolNames: [],
