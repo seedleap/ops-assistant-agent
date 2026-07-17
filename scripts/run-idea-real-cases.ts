@@ -133,6 +133,7 @@ const cases = [
 
 const results: Array<Record<string, unknown>> = [];
 const caseLimit = Math.max(1, Math.min(cases.length, Number(process.env.REAL_CASE_LIMIT) || cases.length));
+const caseTimeoutMs = Math.max(60_000, Number(process.env.REAL_CASE_TIMEOUT_MS) || 10 * 60_000);
 const requestedCase = process.env.REAL_CASE_NAME?.trim();
 const selectedCases = requestedCase
   ? cases.filter((item) => item.name === requestedCase)
@@ -153,7 +154,7 @@ try {
       const workflowId = String(submitted.body.workflow?.id || "");
       if (!workflowId) throw new Error("Idea route returned no workflow id");
       let record: Omit<IdeaWorkflowRecord, "idempotencyKey" | "inputHash" | "checkpoints" | "cancelRequested" | "metadata" | "attempt"> | undefined;
-      const deadline = Date.now() + 5 * 60_000;
+      const deadline = Date.now() + caseTimeoutMs;
       while (Date.now() < deadline) {
         const polled = await request(app).get(`/ideas/${workflowId}`).query({ userId: item.input.userId });
         if (polled.status === 429) {
