@@ -29,7 +29,7 @@ function testConfig(dataDir: string): AppConfig {
     interactiveSessionTimeoutMinutes: 60,
     assistantDryRun: true,
     ideaImage: {
-      model: "gpt-image-1.5",
+      model: "gpt-image-2",
       quality: "low",
       timeoutMs: 90_000,
     },

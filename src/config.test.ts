@@ -108,6 +108,7 @@ test("loadConfig uses Carmack public image buckets and CDN hosts", () => {
   assert.equal(development.ideaAssets.prefix, "public/game");
 
   const testConfig = loadConfig({ NODE_ENV: "test" });
+  assert.equal(testConfig.ideaImage.model, "gpt-image-2");
   assert.equal(testConfig.ideaAssets.storage, "local");
 
   const production = loadConfig({

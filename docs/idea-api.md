@@ -181,7 +181,7 @@ curl --fail-with-body \
           "status": "completed",
           "url": "https://cdn-cf.loopit.me/public/ideas/idea-user/garden-demo/idea_xxxxxxxxx/light_path.png",
           "mimeType": "image/png",
-          "model": "gpt-image-1.5",
+          "model": "gpt-image-2",
           "storage": "s3"
         }
       }

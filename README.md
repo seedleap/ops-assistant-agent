@@ -98,7 +98,7 @@ Idempotency-Key: u-1-project-1-submit-001
 
 JWT 模式下，token 的 `sub` 必须与 `userId` 一致。
 
-图片生成优先读取 `IDEA_IMAGE_BASE_URL`、`IDEA_IMAGE_API_KEY`、`IDEA_IMAGE_MODEL`，也兼容现有的 `AZURE_IMAGE_BASE_URL`、`AZURE_IMAGE_API_KEY`、`AZURE_IMAGE_DEPLOYMENT`。未配置图片服务时文本结果仍会保存，workflow 状态为 `completed_with_errors`。
+图片生成优先读取 `IDEA_IMAGE_BASE_URL`、`IDEA_IMAGE_API_KEY`、`IDEA_IMAGE_MODEL`（默认 `gpt-image-2`），也兼容现有的 `AZURE_IMAGE_BASE_URL`、`AZURE_IMAGE_API_KEY`、`AZURE_IMAGE_DEPLOYMENT`。未配置图片服务时文本结果仍会保存，workflow 状态为 `completed_with_errors`。
 
 development 和 production 默认都使用 S3：生产环境返回 `https://cdn-cf.loopit.me/public/ideas/...`，development 返回 `https://cdn-cf-dev.loopit.me/public/ideas/...`。只有自动化 test 环境默认使用 `DATA_DIR/idea-images/` 本地存储。对象使用不可变缓存头，并按 user/project/workflow/idea 隔离 Key；仅在部署需要覆盖默认 bucket 时设置 `USER_PUBLIC_IMAGES_BUCKET`。
 

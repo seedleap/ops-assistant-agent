@@ -329,7 +329,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     ideaImage: {
       baseUrl: env.IDEA_IMAGE_BASE_URL || env.AZURE_IMAGE_BASE_URL,
       apiKey: env.IDEA_IMAGE_API_KEY || env.AZURE_IMAGE_API_KEY,
-      model: env.IDEA_IMAGE_MODEL || env.AZURE_IMAGE_DEPLOYMENT || "gpt-image-1.5",
+      model: env.IDEA_IMAGE_MODEL || env.AZURE_IMAGE_DEPLOYMENT || "gpt-image-2",
       quality: env.IDEA_IMAGE_QUALITY,
       timeoutMs: env.IDEA_IMAGE_TIMEOUT_MS,
     },
