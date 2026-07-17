@@ -48,7 +48,7 @@ const missing = required.filter((key) => !process.env[key]);
 if (missing.length) throw new Error(`Real-case environment is missing: ${missing.join(", ")}`);
 
 const [{ loadConfig }, { OpsAssistant }, { JsonStore }, { IdeaWorkflow }, { AzureIdeaImageGenerator },
-  { LocalIdeaAssetStore }, { initObservability }, { OutreachScheduler }, { createApp }] = await Promise.all([
+  { createIdeaAssetStore }, { initObservability }, { OutreachScheduler }, { createApp }] = await Promise.all([
   import("../src/config.js"),
   import("../src/agent/assistant.js"),
   import("../src/infrastructure/persistence/json-store.js"),
@@ -69,7 +69,7 @@ const workflow = new IdeaWorkflow(
   store,
   assistant,
   new AzureIdeaImageGenerator(config),
-  new LocalIdeaAssetStore(config),
+  createIdeaAssetStore(config),
   observability,
 );
 const logger = pino({ enabled: false });
@@ -171,20 +171,50 @@ try {
       const titles = record.ideas.map((idea) => idea.title);
       const signatures = record.ideas.map((idea) => `${idea.mechanic}\0${idea.decision}`.toLowerCase());
       const imageChecks = await Promise.all(record.ideas.map(async (idea) => {
-        if (idea.image.status !== "completed" || !idea.image.url?.startsWith("/ideas/assets/")) {
+        if (idea.image.status !== "completed" || !idea.image.url) {
           return { ideaId: idea.id, ok: false, error: idea.image.error || `image status=${idea.image.status}` };
+        }
+        if (idea.image.storage === "s3") {
+          const expectedPrefix = `${config.ideaAssets.cdnBaseUrl}/${config.ideaAssets.prefix}/`;
+          if (!idea.image.url.startsWith(expectedPrefix)) {
+            return { ideaId: idea.id, ok: false, error: `unexpected CDN URL: ${idea.image.url}` };
+          }
+          for (let attempt = 1; attempt <= 10; attempt += 1) {
+            const response = await fetch(idea.image.url, { signal: AbortSignal.timeout(20_000) });
+            const contentType = response.headers.get("content-type") || "";
+            if (response.ok && contentType.startsWith("image/")) {
+              const bytes = (await response.arrayBuffer()).byteLength;
+              return { ideaId: idea.id, ok: bytes > 1_000, bytes, url: idea.image.url, contentType };
+            }
+            if (attempt < 10) await new Promise((resolvePoll) => setTimeout(resolvePoll, 1_000));
+          }
+          return { ideaId: idea.id, ok: false, error: `CDN image unavailable: ${idea.image.url}` };
+        }
+        if (!idea.image.url.startsWith("/ideas/assets/")) {
+          return { ideaId: idea.id, ok: false, error: `unexpected local image URL: ${idea.image.url}` };
         }
         const file = resolve(config.dataDir, "idea-images", idea.image.url.split("/").at(-1)!);
         const fileStat = await stat(file);
         return { ideaId: idea.id, ok: fileStat.size > 1_000, bytes: fileStat.size, file };
       }));
       const checks = {
+        realAgentMode: !config.assistantDryRun,
+        developmentS3Cdn: config.nodeEnv === "development" && config.ideaAssets.storage === "s3" &&
+          config.ideaAssets.cdnBaseUrl === "https://cdn-cf-dev.loopit.me",
         terminalCompleted: record.status === "completed",
         exactCount: record.ideas.length === item.input.count,
         uniqueIds: new Set(record.ideas.map((idea) => idea.id)).size === record.ideas.length,
         uniqueMechanics: new Set(signatures).size === signatures.length,
         gateConsistency: record.ideas.every((idea) => idea.gatePassed === (idea.fatalReasons.length === 0)),
         hasUsableIdea: record.ideas.some((idea) => idea.gatePassed),
+        allTextComplete: record.ideas.every((idea) => [
+          idea.playerGoal, idea.gameState, idea.rules, idea.failState, idea.feedback,
+          idea.difficultyCurve, idea.variationSource, idea.first10Seconds, idea.funRisks, idea.bindingRationale,
+        ].every((value) => typeof value === "string" && value.trim().length > 0)),
+        allAuditsComplete: record.ideas.every((idea) =>
+          typeof idea.audit?.loopPass === "boolean" && typeof idea.audit?.predictionPass === "boolean" &&
+          typeof idea.audit?.interactionPass === "boolean" && typeof idea.audit?.feasibilityPass === "boolean" &&
+          Boolean(idea.audit?.evidence) && Boolean(idea.audit?.recommendedDowngrade)),
         allImagesValid: imageChecks.every((image) => image.ok),
         publicContract: !Object.keys(record).some((key) => [
           "idempotencyKey", "inputHash", "checkpoints", "cancelRequested", "metadata", "attempt",

@@ -62,7 +62,7 @@ const environmentSchema = z.object({
   IDEA_IMAGE_MODEL: optionalString,
   IDEA_IMAGE_QUALITY: z.enum(["low", "medium", "high"]).default("low"),
   IDEA_IMAGE_TIMEOUT_MS: positiveInteger(90_000),
-  IDEA_ASSET_STORAGE: z.enum(["local", "s3"]).default("local"),
+  IDEA_ASSET_STORAGE: z.enum(["local", "s3"]).optional(),
   USER_PUBLIC_IMAGES_BUCKET: optionalString,
   AZURE_IMAGE_BASE_URL: optionalString.pipe(z.string().url().optional()),
   AZURE_IMAGE_API_KEY: optionalString,
@@ -334,7 +334,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
       timeoutMs: env.IDEA_IMAGE_TIMEOUT_MS,
     },
     ideaAssets: {
-      storage: env.IDEA_ASSET_STORAGE,
+      storage: env.IDEA_ASSET_STORAGE || (env.NODE_ENV === "test" ? "local" : "s3"),
       bucket: env.USER_PUBLIC_IMAGES_BUCKET || (env.NODE_ENV === "production"
         ? "user-public-images-829115578968"
         : "user-public-images-829115578968-dev"),

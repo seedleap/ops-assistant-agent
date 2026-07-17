@@ -97,10 +97,15 @@ test("loadConfig requires Langfuse credentials when tracing is enabled", () => {
 });
 
 test("loadConfig uses Carmack public image buckets and CDN hosts", () => {
-  const development = loadConfig({ IDEA_ASSET_STORAGE: "s3" });
+  const development = loadConfig();
+  assert.equal(development.assistantDryRun, false);
+  assert.equal(development.ideaAssets.storage, "s3");
   assert.equal(development.ideaAssets.bucket, "user-public-images-829115578968-dev");
   assert.equal(development.ideaAssets.cdnBaseUrl, "https://cdn-cf-dev.loopit.me");
   assert.equal(development.ideaAssets.prefix, "public/ideas");
+
+  const testConfig = loadConfig({ NODE_ENV: "test" });
+  assert.equal(testConfig.ideaAssets.storage, "local");
 
   const production = loadConfig({
     NODE_ENV: "production",
