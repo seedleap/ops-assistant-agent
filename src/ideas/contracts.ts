@@ -3,6 +3,7 @@ import { z } from "zod";
 
 export const WORKFLOW_VERSION = "idea-workflow-v2";
 export const PROMPT_VERSION = "idea-workflow-v2";
+export const DEFAULT_IDEA_PROJECT_ID = "idea_create";
 
 export interface IdeaWorkflowInput {
   userId: string;
@@ -94,7 +95,7 @@ export function baseBrief(input: IdeaWorkflowInput): Record<string, unknown> {
 export function inputHash(input: IdeaWorkflowInput): string {
   return createHash("sha256").update(JSON.stringify({
     userId: input.userId,
-    projectId: input.projectId || null,
+    projectId: input.projectId || DEFAULT_IDEA_PROJECT_ID,
     ...baseBrief(input),
   })).digest("hex");
 }

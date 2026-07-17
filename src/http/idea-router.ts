@@ -4,12 +4,13 @@ import type { AppConfig } from "../config.js";
 import type { IdeaWorkflow } from "../ideas/workflow.js";
 import type { JsonStore } from "../infrastructure/persistence/json-store.js";
 import type { IdeaWorkflowRecord } from "../domain/types.js";
+import { DEFAULT_IDEA_PROJECT_ID } from "../ideas/contracts.js";
 
 export class IdeaAuthorizationError extends Error {}
 
 const workflowSchema = z.object({
   userId: z.string().trim().min(1).max(128),
-  projectId: z.string().trim().min(1).max(128).optional(),
+  projectId: z.string().trim().min(1).max(128).optional().default(DEFAULT_IDEA_PROJECT_ID),
   theme: z.string().trim().min(1).max(2_000),
   audience: z.string().trim().min(1).max(1_000),
   emotion: z.string().trim().min(1).max(1_000),

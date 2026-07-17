@@ -28,7 +28,7 @@ Idempotency-Key: idea-doc-case-001
 | 字段 | 类型 | 必填 | 限制 |
 | --- | --- | --- | --- |
 | `userId` | string | 是 | 1–128 字符；必须等于 JWT `sub` |
-| `projectId` | string | 否 | 1–128 字符 |
+| `projectId` | string | 否 | 1–128 字符；不传时默认为 `idea_create`，同时用于 CDN 路径 |
 | `theme` | string | 是 | 创意主题，最多 2000 字符 |
 | `audience` | string | 是 | 目标用户，最多 1000 字符 |
 | `emotion` | string | 是 | 目标体验，最多 1000 字符 |

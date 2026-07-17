@@ -114,6 +114,7 @@ test("IdeaWorkflow runs isolated Pi profiles and returns text plus image", async
 
     assert.deepEqual(calls, ["idea-inventor", "idea-auditor", "idea-converger"]);
     assert.equal(workflow.status, "completed");
+    assert.equal(workflow.projectId, "idea_create");
     assert.equal(workflow.ideas.length, 2);
     assert.equal(workflow.ideas[0].image.url, "/ideas/assets/k1.png");
     assert.equal(workflow.ideas[0].image.storage, "local");

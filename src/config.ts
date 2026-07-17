@@ -338,7 +338,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
       bucket: env.USER_PUBLIC_IMAGES_BUCKET || (env.NODE_ENV === "production"
         ? "user-public-images-829115578968"
         : "user-public-images-829115578968-dev"),
-      prefix: "public/ideas",
+      // Reuse Carmack's IAM-authorized public dist key space.
+      prefix: "public/game",
       cdnBaseUrl: env.NODE_ENV === "production"
         ? "https://cdn-cf.loopit.me"
         : "https://cdn-cf-dev.loopit.me",

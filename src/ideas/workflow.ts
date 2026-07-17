@@ -14,6 +14,7 @@ import {
   auditsSchema,
   baseBrief,
   convergenceSchema,
+  DEFAULT_IDEA_PROJECT_ID,
   inputHash,
   inventionSchema,
   normalizeSelectedIdeas,
@@ -61,17 +62,18 @@ export class IdeaWorkflow {
     if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) {
       throw new Error("Idempotency-Key must be 8-128 characters using letters, numbers, dot, underscore, colon or hyphen");
     }
-    const hash = inputHash(input);
+    const normalizedInput = { ...input, projectId: input.projectId || DEFAULT_IDEA_PROJECT_ID };
+    const hash = inputHash(normalizedInput);
     const now = new Date().toISOString();
     const record: IdeaWorkflowRecord = {
       id: createId("idea"),
       idempotencyKey,
       inputHash: hash,
       userId: input.userId,
-      projectId: input.projectId,
+      projectId: normalizedInput.projectId,
       status: "queued",
       stage: "queued",
-      input: baseBrief(input),
+      input: baseBrief(normalizedInput),
       ideas: [],
       checkpoints: {},
       attempt: 0,

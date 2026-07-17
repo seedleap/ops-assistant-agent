@@ -7,6 +7,17 @@ metadata:
     app.kubernetes.io/part-of: loopit-cloud-manager
 ---
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ops-assistant-agent-runtime
+  namespace: ops-assistant-agent
+  labels:
+    app.kubernetes.io/name: ops-assistant-agent
+    app.kubernetes.io/part-of: loopit-cloud-manager
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::829115578968:role/carmack-agent-test-runtime-role
+---
+apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: ops-assistant-agent-data-loopit-ops

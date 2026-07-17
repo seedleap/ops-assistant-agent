@@ -102,7 +102,7 @@ test("loadConfig uses Carmack public image buckets and CDN hosts", () => {
   assert.equal(development.ideaAssets.storage, "s3");
   assert.equal(development.ideaAssets.bucket, "user-public-images-829115578968-dev");
   assert.equal(development.ideaAssets.cdnBaseUrl, "https://cdn-cf-dev.loopit.me");
-  assert.equal(development.ideaAssets.prefix, "public/ideas");
+  assert.equal(development.ideaAssets.prefix, "public/game");
 
   const testConfig = loadConfig({ NODE_ENV: "test" });
   assert.equal(testConfig.ideaAssets.storage, "local");
