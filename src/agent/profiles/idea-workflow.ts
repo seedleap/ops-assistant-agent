@@ -9,7 +9,7 @@ const BASE_RUNTIME = {
 
 const BASE_MODEL = {
   provider: "google-vertex",
-  modelId: "gemini-3-flash-preview",
+  modelId: "gemini-3.1-pro-preview",
   thinkingLevel: "high",
   temperature: 0.7,
 } as const;

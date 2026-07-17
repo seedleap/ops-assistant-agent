@@ -33,11 +33,24 @@ interface AssistantMessageLike {
 function assistantText(message: AssistantMessageLike | undefined): string {
   // 只记录可见文本；Gemini 的思考过程不能进入 trace 输出或后续上下文。
   if (!message || !Array.isArray(message.content)) return "";
-  return message.content
+  const text = message.content
     .filter((part) => part.type === "text" && typeof part.text === "string")
     .map((part) => part.text as string)
     .join("")
     .trim();
+  return stripJsonFence(text);
+}
+
+export function stripJsonFence(text: string): string {
+  const match = text.match(/```json\s*([\s\S]*?)\s*```/i);
+  if (!match) return text;
+  const json = match[1].trim();
+  try {
+    JSON.parse(json);
+    return json;
+  } catch {
+    return text;
+  }
 }
 
 function toolOutput(result: unknown): unknown {
@@ -76,7 +89,7 @@ export function createAgentRunTrace(
     ] : []),
   ]);
   const parentSpanContext = input.traceContext?.parentSpanContext;
-  const root = startObservation(parentSpanContext ? "agent" : profile.traceName, {
+  const root = parentSpanContext ? undefined : startObservation(profile.traceName, {
     input: sanitizeTraceValue(input.prompt),
     metadata: {
       runId: input.runId,
@@ -88,14 +101,9 @@ export function createAgentRunTrace(
       thinkingLevel: profile.model.thinkingLevel,
       temperature: profile.model.temperature,
       maxTurns: profile.runtime.maxTurns,
-      ...(input.traceContext ? {
-        workflowId: input.traceContext.workflowId,
-        stage: input.traceContext.stage,
-        attempt: input.traceContext.attempt,
-      } : {}),
     },
-  }, { asType: "agent", ...(parentSpanContext ? { parentSpanContext } : {}) });
-  if (!parentSpanContext) {
+  }, { asType: "agent" });
+  if (root) {
     root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_NAME, profile.traceName);
     root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_USER_ID, input.userId);
     root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_SESSION_ID, input.imThreadId);
@@ -108,13 +116,17 @@ export function createAgentRunTrace(
   const extension: ExtensionFactory = (pi) => {
     pi.on("turn_start", (event) => {
       currentTurn?.end();
-      currentTurn = root.startObservation(`turn-${event.turnIndex + 1}`, {
+      const attributes = {
+        input: sanitizeTraceValue(input.prompt),
         model: profile.model.modelId,
         modelParameters: {
           temperature: profile.model.temperature,
           thinkingLevel: profile.model.thinkingLevel,
         },
-      }, { asType: "generation" });
+      };
+      currentTurn = parentSpanContext
+        ? startObservation("llm-call", attributes, { asType: "generation", parentSpanContext })
+        : root!.startObservation(`turn-${event.turnIndex + 1}`, attributes, { asType: "generation" });
     });
 
     pi.on("turn_end", (event) => {
@@ -148,6 +160,7 @@ export function createAgentRunTrace(
 
     pi.on("tool_execution_start", (event) => {
       const parent = currentTurn || root;
+      if (!parent) return;
       toolSpans.set(event.toolCallId, parent.startObservation(event.toolName, {
         input: sanitizeTraceValue(event.args),
       }, { asType: "tool" }));
@@ -175,7 +188,7 @@ export function createAgentRunTrace(
     extension,
     addTags(nextTags) {
       nextTags.filter(Boolean).forEach((tag) => tags.add(tag));
-      if (!parentSpanContext) root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [...tags]);
+      root?.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [...tags]);
     },
     async finish(output, stats, error) {
       currentTurn?.end();
@@ -184,30 +197,32 @@ export function createAgentRunTrace(
       if (error) tags.add("failed");
       else if (/^NO_OUTREACH:/i.test(output.trim())) tags.add("no-outreach");
       else tags.add("success");
-      if (!parentSpanContext) root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [...tags]);
-      root.update({
-        output: sanitizeTraceValue(output),
-        metadata: {
-          promptVersion: profile.prompt.version,
-          promptHash,
-          ...(stats ? {
-            inputTokens: stats.tokens.input,
-            outputTokens: stats.tokens.output,
-            cacheReadTokens: stats.tokens.cacheRead,
-            cacheWriteTokens: stats.tokens.cacheWrite,
-            cacheHitRate: (() => {
-              const promptTokens = stats.tokens.input + stats.tokens.cacheRead + stats.tokens.cacheWrite;
-              return promptTokens > 0 ? stats.tokens.cacheRead / promptTokens : 0;
-            })(),
-            totalTokens: stats.tokens.total,
-            costUsd: stats.cost,
-            toolCalls: stats.toolCalls,
-          } : {}),
-          ...(error ? { error: errorMessage(error) } : {}),
-        },
-        ...(error ? { level: "ERROR", statusMessage: errorMessage(error) } : {}),
-      });
-      root.end();
+      if (root) {
+        root.otelSpan.setAttribute(LangfuseOtelSpanAttributes.TRACE_TAGS, [...tags]);
+        root.update({
+          output: sanitizeTraceValue(output),
+          metadata: {
+            promptVersion: profile.prompt.version,
+            promptHash,
+            ...(stats ? {
+              inputTokens: stats.tokens.input,
+              outputTokens: stats.tokens.output,
+              cacheReadTokens: stats.tokens.cacheRead,
+              cacheWriteTokens: stats.tokens.cacheWrite,
+              cacheHitRate: (() => {
+                const promptTokens = stats.tokens.input + stats.tokens.cacheRead + stats.tokens.cacheWrite;
+                return promptTokens > 0 ? stats.tokens.cacheRead / promptTokens : 0;
+              })(),
+              totalTokens: stats.tokens.total,
+              costUsd: stats.cost,
+              toolCalls: stats.toolCalls,
+            } : {}),
+            ...(error ? { error: errorMessage(error) } : {}),
+          },
+          ...(error ? { level: "ERROR", statusMessage: errorMessage(error) } : {}),
+        });
+        root.end();
+      }
     },
   };
 }

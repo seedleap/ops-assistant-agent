@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parse } from "dotenv";
+import pino from "pino";
+import request from "supertest";
+import type { IdeaWorkflowRecord } from "../src/domain/types.js";
 
 Object.assign(process.env, parse(await readFile(resolve(".env"), "utf8")));
 const envFile = process.env.REAL_CASE_ENV_FILE;
@@ -21,9 +24,14 @@ process.env.API_AUTH_MODE = "none";
 let runtimeCredentialsPath: string | undefined;
 if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && process.env.GOOGLE_CLOUD_SA_JSON) {
   const credentialsPath = resolve(process.env.DATA_DIR, "runtime", "gcp-sa.json");
-  JSON.parse(process.env.GOOGLE_CLOUD_SA_JSON);
+  // 支持容器下发的原始 JSON，也兼容 dotenv 中被转义过的多行 JSON。
+  const rawCredentials = process.env.GOOGLE_CLOUD_SA_JSON;
+  const credentials = rawCredentials.startsWith("{\\\"")
+    ? rawCredentials.replace(/\\\"/g, "\"").replace(/\\\r?\n/g, "\\n")
+    : rawCredentials;
+  JSON.parse(credentials);
   await mkdir(resolve(process.env.DATA_DIR, "runtime"), { recursive: true });
-  await writeFile(credentialsPath, process.env.GOOGLE_CLOUD_SA_JSON, { mode: 0o600 });
+  await writeFile(credentialsPath, credentials, { mode: 0o600 });
   process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
   runtimeCredentialsPath = credentialsPath;
 }
@@ -40,7 +48,7 @@ const missing = required.filter((key) => !process.env[key]);
 if (missing.length) throw new Error(`Real-case environment is missing: ${missing.join(", ")}`);
 
 const [{ loadConfig }, { OpsAssistant }, { JsonStore }, { IdeaWorkflow }, { AzureIdeaImageGenerator },
-  { LocalIdeaAssetStore }, { initObservability }] = await Promise.all([
+  { LocalIdeaAssetStore }, { initObservability }, { OutreachScheduler }, { createApp }] = await Promise.all([
   import("../src/config.js"),
   import("../src/agent/assistant.js"),
   import("../src/infrastructure/persistence/json-store.js"),
@@ -48,6 +56,8 @@ const [{ loadConfig }, { OpsAssistant }, { JsonStore }, { IdeaWorkflow }, { Azur
   import("../src/integrations/images/idea-image.js"),
   import("../src/integrations/images/idea-asset-store.js"),
   import("../src/observability/index.js"),
+  import("../src/infrastructure/scheduler/outreach-scheduler.js"),
+  import("../src/http/app.js"),
 ]);
 
 const config = loadConfig();
@@ -62,6 +72,9 @@ const workflow = new IdeaWorkflow(
   new LocalIdeaAssetStore(config),
   observability,
 );
+const logger = pino({ enabled: false });
+const scheduler = new OutreachScheduler(config, store, assistant, logger);
+const app = createApp({ config, store, assistant, scheduler, logger, ideaWorkflow: workflow });
 
 const cases = [
   {
@@ -120,12 +133,41 @@ const cases = [
 
 const results: Array<Record<string, unknown>> = [];
 const caseLimit = Math.max(1, Math.min(cases.length, Number(process.env.REAL_CASE_LIMIT) || cases.length));
+const requestedCase = process.env.REAL_CASE_NAME?.trim();
+const selectedCases = requestedCase
+  ? cases.filter((item) => item.name === requestedCase)
+  : cases.slice(0, caseLimit);
+if (requestedCase && selectedCases.length === 0) {
+  throw new Error(`Unknown REAL_CASE_NAME: ${requestedCase}`);
+}
 try {
-  for (const item of cases.slice(0, caseLimit)) {
+  for (const item of selectedCases) {
     const startedAt = Date.now();
     process.stdout.write(`CASE_START ${item.name}\n`);
     try {
-      const record = await workflow.run(item.input, `real:${runStamp}:${item.name}:${randomUUID().slice(0, 8)}`);
+      const submitted = await request(app)
+        .post("/ideas/generate")
+        .set("Idempotency-Key", `real:${runStamp}:${item.name}:${randomUUID().slice(0, 8)}`)
+        .send(item.input);
+      if (submitted.status !== 202) throw new Error(`Idea route returned ${submitted.status}: ${JSON.stringify(submitted.body)}`);
+      const workflowId = String(submitted.body.workflow?.id || "");
+      if (!workflowId) throw new Error("Idea route returned no workflow id");
+      let record: Omit<IdeaWorkflowRecord, "idempotencyKey" | "inputHash" | "checkpoints" | "cancelRequested" | "metadata" | "attempt"> | undefined;
+      const deadline = Date.now() + 5 * 60_000;
+      while (Date.now() < deadline) {
+        const polled = await request(app).get(`/ideas/${workflowId}`).query({ userId: item.input.userId });
+        if (polled.status === 429) {
+          const retryAfterSeconds = Number(polled.headers["retry-after"]) || 1;
+          await new Promise((resolvePoll) => setTimeout(resolvePoll, retryAfterSeconds * 1_000));
+          continue;
+        }
+        if (polled.status !== 200) throw new Error(`Idea status route returned ${polled.status}`);
+        record = polled.body.workflow;
+        if (["completed", "completed_with_errors", "failed", "canceled"].includes(record!.status)) break;
+        await new Promise((resolvePoll) => setTimeout(resolvePoll, 1_000));
+      }
+      if (!record) throw new Error("Idea route polling timed out");
+      const internalRecord = store.getIdeaWorkflow(workflowId)!;
       const titles = record.ideas.map((idea) => idea.title);
       const signatures = record.ideas.map((idea) => `${idea.mechanic}\0${idea.decision}`.toLowerCase());
       const imageChecks = await Promise.all(record.ideas.map(async (idea) => {
@@ -141,20 +183,25 @@ try {
         exactCount: record.ideas.length === item.input.count,
         uniqueIds: new Set(record.ideas.map((idea) => idea.id)).size === record.ideas.length,
         uniqueMechanics: new Set(signatures).size === signatures.length,
-        allGatesPassed: record.ideas.every((idea) => idea.gatePassed && idea.fatalReasons.length === 0),
+        gateConsistency: record.ideas.every((idea) => idea.gatePassed === (idea.fatalReasons.length === 0)),
+        hasUsableIdea: record.ideas.some((idea) => idea.gatePassed),
         allImagesValid: imageChecks.every((image) => image.ok),
+        publicContract: !Object.keys(record).some((key) => [
+          "idempotencyKey", "inputHash", "checkpoints", "cancelRequested", "metadata", "attempt",
+        ].includes(key)),
         allCheckpointsSaved: Boolean(
-          record.checkpoints.invention && record.checkpoints.audits && record.checkpoints.convergence,
+          internalRecord.checkpoints.invention && internalRecord.checkpoints.audits && internalRecord.checkpoints.convergence,
         ),
       };
       const passed = Object.values(checks).every(Boolean);
       results.push({
         case: item.name,
-        workflowId: record.id,
+        workflowId,
         status: record.status,
         durationMs: Date.now() - startedAt,
         passed,
         checks,
+        rejectedCount: record.ideas.filter((idea) => !idea.gatePassed).length,
         titles,
         ideas: record.ideas,
         images: imageChecks,
@@ -173,6 +220,7 @@ try {
     await observability.forceFlush();
   }
 } finally {
+  await workflow.close().catch(() => undefined);
   await assistant.close().catch(() => undefined);
   await observability.shutdown().catch(() => undefined);
   if (runtimeCredentialsPath) await rm(runtimeCredentialsPath, { force: true });

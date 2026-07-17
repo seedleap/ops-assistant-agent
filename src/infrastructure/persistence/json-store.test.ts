@@ -58,6 +58,34 @@ test("Idea workflow admission is atomic per user", async () => {
   }
 });
 
+test("Idea workflow reads are immutable and image updates are atomic", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "ops-idea-images-"));
+  try {
+    const store = await JsonStore.open(dataDir);
+    const record = queuedIdeaRecord("idea-images", "submit-images");
+    record.ideas = ["a", "b"].map((id) => ({
+      id, title: id, summary: id, mechanic: id, interactionPattern: "tap-choice" as const,
+      playerAction: id, decision: id, loop: id,
+      failureRecovery: id, whyFun: id, prototypeTest: id, gatePassed: true,
+      fatalReasons: [], imagePrompt: id, image: { status: "pending" as const },
+    }));
+    await store.createIdeaWorkflow(record);
+
+    const read = store.getIdeaWorkflow(record.id)!;
+    read.ideas[0].title = "mutated outside store";
+    assert.equal(store.getIdeaWorkflow(record.id)!.ideas[0].title, "a");
+
+    await Promise.all([
+      store.updateIdeaImage(record.id, "a", { status: "completed", url: "/a.png" }),
+      store.updateIdeaImage(record.id, "b", { status: "completed", url: "/b.png" }),
+    ]);
+    const updated = store.getIdeaWorkflow(record.id)!;
+    assert.deepEqual(updated.ideas.map((idea) => idea.image.url), ["/a.png", "/b.png"]);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
 test("conversation recovery keeps messages after the Pi session directory is lost", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "ops-recovery-"));
   try {

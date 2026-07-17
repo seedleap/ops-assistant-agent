@@ -58,7 +58,7 @@ test("idea workflow prompts preserve stage separation and JSON contracts", async
   assert.match(inventor, /可证伪/);
   assert.match(inventor, /3 到 5 秒/);
   assert.match(auditor, /不能修改候选/);
-  assert.match(auditor, /fatal_reasons/);
+  assert.match(auditor, /fatalReasons/);
   assert.match(converger, /不得在收敛阶段凭空修复候选/);
-  assert.match(converger, /image_prompt/);
+  assert.match(converger, /imagePrompt/);
 });

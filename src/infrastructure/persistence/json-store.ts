@@ -7,6 +7,7 @@ import type {
   ConversationRecord,
   ConversationSessionRecord,
   ISODateString,
+  IdeaImageResult,
   IdeaWorkflowRecord,
   MessageRecord,
   OutboxMessage,
@@ -48,7 +49,10 @@ function normalizeIdeaWorkflow(record: Partial<IdeaWorkflowRecord>): IdeaWorkflo
     status: record.status || "failed",
     stage: record.stage || "complete",
     input: record.input || {},
-    ideas: record.ideas || [],
+    ideas: (record.ideas || []).map((idea) => ({
+      ...idea,
+      interactionPattern: idea.interactionPattern || "other",
+    })),
     checkpoints: record.checkpoints || {},
     attempt: record.attempt || 0,
     cancelRequested: record.cancelRequested || false,
@@ -104,7 +108,8 @@ export class JsonStore {
   }
 
   getIdeaWorkflow(id: string): IdeaWorkflowRecord | undefined {
-    return this.state.ideaWorkflows.find((workflow) => workflow.id === id);
+    const workflow = this.state.ideaWorkflows.find((item) => item.id === id);
+    return workflow ? structuredClone(workflow) : undefined;
   }
 
   async createIdeaWorkflow(record: IdeaWorkflowRecord): Promise<void> {
@@ -145,9 +150,21 @@ export class JsonStore {
     >>,
   ): Promise<void> {
     await this.saveMutex.runExclusive(async () => {
-      const workflow = this.getIdeaWorkflow(id);
+      const workflow = this.state.ideaWorkflows.find((item) => item.id === id);
       if (!workflow) throw new Error(`Idea workflow not found: ${id}`);
       Object.assign(workflow, update, { updatedAt: nowIso() });
+      await this.writeState();
+    });
+  }
+
+  async updateIdeaImage(id: string, ideaId: string, image: IdeaImageResult): Promise<void> {
+    await this.saveMutex.runExclusive(async () => {
+      const workflow = this.state.ideaWorkflows.find((item) => item.id === id);
+      if (!workflow) throw new Error(`Idea workflow not found: ${id}`);
+      const idea = workflow.ideas.find((item) => item.id === ideaId);
+      if (!idea) throw new Error(`Idea not found in workflow ${id}: ${ideaId}`);
+      idea.image = image;
+      workflow.updatedAt = nowIso();
       await this.writeState();
     });
   }

@@ -54,6 +54,7 @@ test("each Agent Profile owns its prompt, tools and runtime policy", () => {
   const inventor = resolveAgentProfileById(config, "idea-inventor");
   assert.equal(inventor.prompt.version, "idea-workflow-v2");
   assert.equal(inventor.traceName, "idea");
+  assert.equal(inventor.model.modelId, "gemini-3.1-pro-preview");
   assert.deepEqual(inventor.toolNames, []);
   assert.equal(inventor.runtime.maxTurns, 2);
 });
@@ -99,7 +100,7 @@ test("one Profile model override does not implicitly change another Profile", ()
     ASSISTANT_DRY_RUN: "true",
     ASSISTANT_MODEL_PROVIDER: "openai",
     ASSISTANT_MODEL_ID: "gpt-test",
-    MODEL_WHITELIST: "openai/gpt-test,google-vertex/gemini-3-flash-preview",
+    MODEL_WHITELIST: "openai/gpt-test,google-vertex/gemini-3-flash-preview,google-vertex/gemini-3.1-pro-preview",
   });
 
   const chat = resolveAgentProfileById(config, "creator-chat");

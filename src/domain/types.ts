@@ -94,6 +94,8 @@ export interface GeneratedIdea {
   title: string;
   summary: string;
   mechanic: string;
+  interactionPattern: "tap-choice" | "timing" | "drag-track" | "swipe-path" | "hold-release" |
+    "sequence" | "resource-allocation" | "spatial-arrangement" | "other";
   playerAction: string;
   decision: string;
   loop: string;

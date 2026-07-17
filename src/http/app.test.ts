@@ -194,10 +194,14 @@ test("health is public while API routes require a valid JWT", async () => {
       })
       .expect(400);
 
-    await request(app)
+    const publicWorkflow = await request(app)
       .get(`/ideas/${generated.body.workflow.id}?userId=idea-user`)
       .set("Authorization", `Bearer ${token}`)
       .expect(200);
+    assert.equal(publicWorkflow.body.workflow.checkpoints, undefined);
+    assert.equal(publicWorkflow.body.workflow.idempotencyKey, undefined);
+    assert.equal(publicWorkflow.body.workflow.inputHash, undefined);
+    assert.equal(publicWorkflow.body.workflow.metadata, undefined);
 
     await request(app)
       .post("/ideas/generate")
