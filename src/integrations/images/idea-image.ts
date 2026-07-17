@@ -36,10 +36,10 @@ export class AzureIdeaImageGenerator implements IdeaImageGenerator {
       body: JSON.stringify({
         model,
         prompt: input.prompt,
-        size: "1024x1536",
+        size: this.config.ideaImage.size,
         quality,
-        background: "opaque",
-        output_format: "png",
+        background: this.config.ideaImage.background,
+        output_format: this.config.ideaImage.outputFormat,
       }),
     });
     const body = await response.json().catch(() => ({})) as {

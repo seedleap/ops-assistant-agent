@@ -2,6 +2,7 @@ import "dotenv/config";
 import { isAbsolute, resolve } from "node:path";
 import { z } from "zod";
 import { AGENT_PROFILES, type AgentProfileId } from "./agent/profiles/catalog.js";
+import { IDEA_IMAGE_CONFIG } from "./agent/profiles/idea-workflow.js";
 import type { AgentProfileOverrides } from "./agent/profiles/types.js";
 
 const CREATOR_CHAT_PROFILE = AGENT_PROFILES["creator-chat"];
@@ -60,7 +61,7 @@ const environmentSchema = z.object({
   IDEA_IMAGE_BASE_URL: optionalString.pipe(z.string().url().optional()),
   IDEA_IMAGE_API_KEY: optionalString,
   IDEA_IMAGE_MODEL: optionalString,
-  IDEA_IMAGE_QUALITY: z.enum(["low", "medium", "high"]).default("low"),
+  IDEA_IMAGE_QUALITY: z.enum(["low", "medium", "high"]).default(IDEA_IMAGE_CONFIG.quality),
   IDEA_IMAGE_TIMEOUT_MS: positiveInteger(90_000),
   IDEA_ASSET_STORAGE: z.enum(["local", "s3"]).optional(),
   USER_PUBLIC_IMAGES_BUCKET: optionalString,
@@ -159,6 +160,9 @@ export interface AppConfig {
     apiKey?: string;
     model: string;
     quality: "low" | "medium" | "high";
+    size: "1024x1536";
+    background: "opaque";
+    outputFormat: "png";
     timeoutMs: number;
   };
   ideaAssets: {
@@ -329,8 +333,11 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     ideaImage: {
       baseUrl: env.IDEA_IMAGE_BASE_URL || env.AZURE_IMAGE_BASE_URL,
       apiKey: env.IDEA_IMAGE_API_KEY || env.AZURE_IMAGE_API_KEY,
-      model: env.IDEA_IMAGE_MODEL || env.AZURE_IMAGE_DEPLOYMENT || "gpt-image-2",
+      model: env.IDEA_IMAGE_MODEL || env.AZURE_IMAGE_DEPLOYMENT || IDEA_IMAGE_CONFIG.modelId,
       quality: env.IDEA_IMAGE_QUALITY,
+      size: IDEA_IMAGE_CONFIG.size,
+      background: IDEA_IMAGE_CONFIG.background,
+      outputFormat: IDEA_IMAGE_CONFIG.outputFormat,
       timeoutMs: env.IDEA_IMAGE_TIMEOUT_MS,
     },
     ideaAssets: {

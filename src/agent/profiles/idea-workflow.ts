@@ -13,6 +13,14 @@ const BASE_MODEL = {
   thinkingLevel: "high",
 } as const;
 
+export const IDEA_IMAGE_CONFIG = {
+  modelId: "gpt-image-2",
+  quality: "low",
+  size: "1024x1536",
+  background: "opaque",
+  outputFormat: "png",
+} as const;
+
 export const IDEA_INVENTOR_PROFILE = {
   runType: "interactive",
   traceName: "idea",

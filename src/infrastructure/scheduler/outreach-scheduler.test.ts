@@ -31,6 +31,9 @@ function testConfig(dataDir: string): AppConfig {
     ideaImage: {
       model: "gpt-image-2",
       quality: "low",
+      size: "1024x1536",
+      background: "opaque",
+      outputFormat: "png",
       timeoutMs: 90_000,
     },
     ideaAssets: {

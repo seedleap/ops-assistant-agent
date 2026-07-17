@@ -109,6 +109,10 @@ test("loadConfig uses Carmack public image buckets and CDN hosts", () => {
 
   const testConfig = loadConfig({ NODE_ENV: "test" });
   assert.equal(testConfig.ideaImage.model, "gpt-image-2");
+  assert.equal(testConfig.ideaImage.quality, "low");
+  assert.equal(testConfig.ideaImage.size, "1024x1536");
+  assert.equal(testConfig.ideaImage.background, "opaque");
+  assert.equal(testConfig.ideaImage.outputFormat, "png");
   assert.equal(testConfig.ideaAssets.storage, "local");
 
   const production = loadConfig({
