@@ -146,7 +146,7 @@ export class JsonStore {
     id: string,
     update: Partial<Pick<IdeaWorkflowRecord,
       "status" | "stage" | "ideas" | "checkpoints" | "error" | "attempt" |
-      "cancelRequested" | "startedAt" | "completedAt"
+      "cancelRequested" | "metadata" | "startedAt" | "completedAt"
     >>,
   ): Promise<void> {
     await this.saveMutex.runExclusive(async () => {

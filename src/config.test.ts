@@ -99,13 +99,13 @@ test("loadConfig requires Langfuse credentials when tracing is enabled", () => {
   );
 });
 
-test("loadConfig uses Carmack public image buckets and CDN hosts", () => {
+test("loadConfig isolates Idea images in the workspace lab namespace", () => {
   const development = loadConfig();
   assert.equal(development.assistantDryRun, false);
   assert.equal(development.ideaAssets.storage, "s3");
-  assert.equal(development.ideaAssets.bucket, "user-public-images-829115578968-dev");
+  assert.equal(development.ideaAssets.bucket, "leap-workspace-shared-dev");
   assert.equal(development.ideaAssets.cdnBaseUrl, "https://cdn-cf-dev.loopit.me");
-  assert.equal(development.ideaAssets.prefix, "public/game");
+  assert.equal(development.ideaAssets.prefix, "lab/ideas");
 
   const testConfig = loadConfig({ NODE_ENV: "test" });
   assert.equal(testConfig.ideaImage.model, "gpt-image-2");
@@ -122,10 +122,25 @@ test("loadConfig uses Carmack public image buckets and CDN hosts", () => {
     CORS_ORIGINS: "https://ops.loopit.me",
     API_AUTH_MODE: "jwt",
     API_JWT_SECRET: "a".repeat(32),
-    USER_PUBLIC_IMAGES_BUCKET: "custom-public-images",
   });
-  assert.equal(production.ideaAssets.bucket, "custom-public-images");
-  assert.equal(production.ideaAssets.cdnBaseUrl, "https://cdn-cf.loopit.me");
+  assert.equal(production.ideaAssets.bucket, "leap-workspace-shared-dev");
+  assert.equal(production.ideaAssets.prefix, "lab/ideas");
+  assert.equal(production.ideaAssets.cdnBaseUrl, "https://cdn-cf-dev.loopit.me");
+
+  const overridden = loadConfig({
+    NODE_ENV: "production",
+    ASSISTANT_DRY_RUN: "true",
+    STATIC_UI_ENABLED: "false",
+    CORS_ORIGINS: "https://ops.loopit.me",
+    API_AUTH_MODE: "jwt",
+    API_JWT_SECRET: "a".repeat(32),
+    IDEA_ASSET_BUCKET: "custom-workspace-bucket",
+    IDEA_ASSET_PREFIX: "custom/ideas",
+    IDEA_ASSET_CDN_BASE_URL: "https://assets.example.com",
+  });
+  assert.equal(overridden.ideaAssets.bucket, "custom-workspace-bucket");
+  assert.equal(overridden.ideaAssets.prefix, "custom/ideas");
+  assert.equal(overridden.ideaAssets.cdnBaseUrl, "https://assets.example.com");
 });
 
 test("loadConfig reuses the shared Azure image credential for Idea text agents", () => {

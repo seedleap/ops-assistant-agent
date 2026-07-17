@@ -3,7 +3,7 @@ import test from "node:test";
 import { loadConfig } from "../../config.js";
 import { ideaAssetKey } from "./idea-asset-store.js";
 
-test("ideaAssetKey uses Carmack's authorized public dist layout", () => {
+test("ideaAssetKey isolates generated images under the workflow directory", () => {
   const config = loadConfig();
   assert.equal(
     ideaAssetKey(config.ideaAssets, {
@@ -12,11 +12,11 @@ test("ideaAssetKey uses Carmack's authorized public dist layout", () => {
       workflowId: "idea_abc",
       ideaId: "Idea One",
     }),
-    "public/game/project-456/idea_abc/workspace/dist/ideas/idea-one.png",
+    "lab/ideas/idea_abc/idea-one.png",
   );
 });
 
-test("ideaAssetKey uses idea_create when projectId is omitted", () => {
+test("ideaAssetKey does not mix project ids into the lab asset namespace", () => {
   const config = loadConfig();
   assert.equal(
     ideaAssetKey(config.ideaAssets, {
@@ -24,6 +24,6 @@ test("ideaAssetKey uses idea_create when projectId is omitted", () => {
       workflowId: "idea-abc",
       ideaId: "idea-one",
     }),
-    "public/game/idea_create/idea-abc/workspace/dist/ideas/idea-one.png",
+    "lab/ideas/idea-abc/idea-one.png",
   );
 });

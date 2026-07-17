@@ -1,6 +1,6 @@
 # Idea Generate API
 
-面向外部系统的 Idea API。客户端提交一次生成任务，随后轮询任务状态；服务会依次完成玩法发散、独立审核、收敛、效果图生成和 CDN 上传。
+面向外部系统的 Idea API。客户端提交一次生成任务，随后轮询任务状态；Idea Workflow V1 会依次完成玩法内核发散、红队收敛、效果图生成和 CDN 上传。
 
 ## 基本约定
 
@@ -121,7 +121,7 @@ curl --fail-with-body \
 | `completed_with_errors` | 文本完成，但至少一张图片失败 | 否 |
 | `failed` | Workflow 失败，查看 `workflow.error` | 否 |
 
-`workflow.stage` 可能为 `queued`、`invent`、`audit`、`converge`、`images`、`complete`。
+V1 新任务的 `workflow.stage` 可能为 `queued`、`invent`、`converge`、`images`、`complete`。切换前创建的 V2 历史任务仍可能保留 `audit` 阶段值。
 
 ### 完成结果结构
 
@@ -180,7 +180,7 @@ curl --fail-with-body \
         "imagePrompt": "竖屏花园游戏画面，展示可操作光路、花苞、杂草和即时反馈。",
         "image": {
           "status": "completed",
-          "url": "https://cdn-cf.loopit.me/public/game/garden-demo/idea_xxxxxxxxx/workspace/dist/ideas/light_path.png",
+          "url": "https://cdn-cf-dev.loopit.me/lab/ideas/idea_xxxxxxxxx/light_path.png",
           "mimeType": "image/png",
           "model": "gpt-image-2",
           "storage": "s3"
@@ -195,9 +195,9 @@ curl --fail-with-body \
 }
 ```
 
-实际 `ideas` 数量等于请求中的 `count`。审核失败的候选不会伪装成通过：`gatePassed=false`，并保留 `audit.fatalReasons`、`audit.evidence` 和 `audit.recommendedDowngrade`，最终仍由用户选择。
+实际 `ideas` 数量等于请求中的 `count`。V1 红队收敛判断失败的候选不会伪装成通过：`gatePassed=false`，并保留 `audit.fatalReasons`、`audit.evidence` 和 `audit.recommendedDowngrade`，最终仍由用户选择。为兼容现有调用方，字段名继续使用 `audit`；它表示 V1 Converger 内的结构化红队判断，不代表一次独立 Auditor 模型调用。
 
-生产环境成功图片的 URL 结构为 `https://cdn-cf.loopit.me/public/game/{projectId}/{workflowId}/workspace/dist/ideas/{ideaId}.png`。测试环境使用相同路径结构，域名为 `https://cdn-cf-dev.loopit.me`。如果单张图片在内部重试后仍失败，该图片返回 `status=failed` 和 `error`，任务状态为 `completed_with_errors`；已生成的 Idea 文本和其他成功图片仍会正常返回。
+该内部服务在 development 和 production 部署中都把图片写入 `leap-workspace-shared-dev/lab/ideas/{workflowId}/{ideaId}.png`，返回 `https://cdn-cf-dev.loopit.me/lab/ideas/...`。该命名空间与正式游戏发布使用的 `public/game` 隔离；user/project 信息写入 S3 Object Metadata。如果单张图片在内部重试后仍失败，该图片返回 `status=failed` 和 `error`，任务状态为 `completed_with_errors`；已生成的 Idea 文本和其他成功图片仍会正常返回。
 
 ## 完整轮询 Case
 

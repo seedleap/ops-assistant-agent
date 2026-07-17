@@ -1,7 +1,6 @@
 import { CREATOR_CHAT_PROFILE } from "./creator-chat.js";
 import { CREATOR_OUTREACH_PROFILE } from "./creator-outreach.js";
 import {
-  IDEA_AUDITOR_PROFILE,
   IDEA_CONVERGER_PROFILE,
   IDEA_INVENTOR_PROFILE,
 } from "./idea-workflow.js";
@@ -12,7 +11,6 @@ export const AGENT_PROFILES = {
   "creator-chat": CREATOR_CHAT_PROFILE,
   "creator-outreach": CREATOR_OUTREACH_PROFILE,
   "idea-inventor": IDEA_INVENTOR_PROFILE,
-  "idea-auditor": IDEA_AUDITOR_PROFILE,
   "idea-converger": IDEA_CONVERGER_PROFILE,
 } as const satisfies Record<string, AgentProfileDefinition>;
 

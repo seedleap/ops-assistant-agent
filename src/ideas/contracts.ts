@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
-export const WORKFLOW_VERSION = "idea-workflow-v2";
-export const PROMPT_VERSION = "idea-workflow-v2";
+export const WORKFLOW_VERSION = "idea-workflow-v1";
+export const PROMPT_VERSION = "idea-workflow-v1";
 export const DEFAULT_IDEA_PROJECT_ID = "idea_create";
 
 export interface IdeaWorkflowInput {
@@ -18,7 +18,12 @@ export interface IdeaWorkflowInput {
 }
 
 const ideaIdSchema = z.string().trim().min(1).max(128);
-const ideaTextSchema = z.string().trim().min(1).max(4_000);
+const ideaTextSchema = z.preprocess(
+  (value) => Array.isArray(value) && value.every((item) => typeof item === "string")
+    ? value.join("；")
+    : value,
+  z.string().trim().min(1).max(4_000),
+);
 export const interactionPatternSchema = z.enum([
   "tap-choice", "timing", "drag-track", "swipe-path", "hold-release",
   "sequence", "resource-allocation", "spatial-arrangement", "other",
@@ -27,16 +32,14 @@ export const interactionPatternSchema = z.enum([
 export const kernelSchema = z.object({
   id: ideaIdSchema, title: ideaTextSchema, mechanicFamily: ideaTextSchema,
   interactionPattern: interactionPatternSchema,
-  observation: ideaTextSchema, decision: ideaTextSchema, action: ideaTextSchema,
-  stateTransition: ideaTextSchema, feedback: ideaTextSchema, loopContract: ideaTextSchema,
-  predictionContract: ideaTextSchema, visibleSignal: ideaTextSchema,
-  predictionWindow: ideaTextSchema, nextDecision: ideaTextSchema,
-  failureRecovery: ideaTextSchema, whyFun: ideaTextSchema, prototypeTest: ideaTextSchema,
+  mechanicAnchor: ideaTextSchema, coreAction: ideaTextSchema, gameState: ideaTextSchema,
+  playerDecision: ideaTextSchema, tension: ideaTextSchema, failAndRecovery: ideaTextSchema,
+  masteryGrowth: ideaTextSchema, variationSource: ideaTextSchema, themeBinding: ideaTextSchema,
+  whyFun: ideaTextSchema, antiClone: ideaTextSchema,
 });
 
-export const auditSchema = z.object({
-  ideaId: ideaIdSchema, loopPass: z.boolean(), predictionPass: z.boolean(),
-  interactionPass: z.boolean(), feasibilityPass: z.boolean(),
+export const redTeamAssessmentSchema = z.object({
+  loopPass: z.boolean(), predictionPass: z.boolean(), interactionPass: z.boolean(), feasibilityPass: z.boolean(),
   fatalReasons: z.array(ideaTextSchema).max(8), evidence: ideaTextSchema,
   recommendedDowngrade: ideaTextSchema,
 });
@@ -50,19 +53,16 @@ export const selectedIdeaDraftSchema = z.object({
   failureRecovery: ideaTextSchema, whyFun: ideaTextSchema, prototypeTest: ideaTextSchema,
   difficultyCurve: ideaTextSchema, variationSource: ideaTextSchema,
   first10Seconds: ideaTextSchema, funRisks: ideaTextSchema, bindingRationale: ideaTextSchema,
-  imagePrompt: ideaTextSchema,
+  imagePrompt: ideaTextSchema, audit: redTeamAssessmentSchema,
 });
 export const selectedIdeaSchema = selectedIdeaDraftSchema.extend({
   gatePassed: z.boolean(), fatalReasons: z.array(ideaTextSchema).max(8),
-  audit: auditSchema.omit({ ideaId: true }),
 });
 
 export const inventionSchema = z.object({ kernels: z.array(kernelSchema).min(1).max(16) });
-export const auditsSchema = z.object({ audits: z.array(auditSchema).min(1).max(16) });
 export const convergenceSchema = z.object({ ideas: z.array(selectedIdeaDraftSchema).min(1).max(8) });
 
 export type Invention = z.infer<typeof inventionSchema>;
-export type Audits = z.infer<typeof auditsSchema>;
 export type SelectedIdeaDraft = z.infer<typeof selectedIdeaDraftSchema>;
 export type SelectedIdea = z.infer<typeof selectedIdeaSchema>;
 
@@ -105,39 +105,15 @@ export function assertUniqueIds(items: Array<{ id: string }>, label: string): vo
   if (new Set(ids).size !== ids.length) throw new Error(`${label} contains duplicate ids`);
 }
 
-export function validateAudits(kernels: Invention["kernels"], audits: Audits["audits"]): void {
-  const expected = new Set(kernels.map((item) => item.id));
-  const actual = audits.map((item) => item.ideaId);
-  if (new Set(actual).size !== actual.length) throw new Error("audits contain duplicate ideaId values");
-  const missing = [...expected].filter((id) => !actual.includes(id));
-  const unknown = actual.filter((id) => !expected.has(id));
-  if (missing.length || unknown.length) {
-    throw new Error(`audit coverage mismatch: missing=${missing.join(",") || "none"}; unknown=${unknown.join(",") || "none"}`);
-  }
-  for (const audit of audits) {
-    const allPassed = [
-      audit.loopPass,
-      audit.predictionPass,
-      audit.interactionPass,
-      audit.feasibilityPass,
-    ].every(Boolean);
-    if (allPassed !== (audit.fatalReasons.length === 0)) {
-      throw new Error(`audit verdict is inconsistent for ${audit.ideaId}`);
-    }
-  }
-}
-
 export function normalizeSelectedIdeas(
   selected: SelectedIdeaDraft[],
   desiredCount: number,
   kernels: Invention["kernels"],
-  audits: Audits["audits"],
 ): SelectedIdea[] {
   if (selected.length !== desiredCount) throw new Error(`Idea Agent returned ${selected.length} ideas; expected ${desiredCount}`);
   assertUniqueIds(selected, "selected ideas");
   const candidates = new Set(kernels.map((item) => item.id));
   const candidateById = new Map(kernels.map((item) => [item.id, item]));
-  const auditById = new Map(audits.map((audit) => [audit.ideaId, audit]));
   const signatures = selected.map((idea) => `${idea.mechanic}\0${idea.decision}`.toLowerCase().replace(/\s+/g, " ").trim());
   if (new Set(signatures).size !== signatures.length) throw new Error("selected ideas contain duplicate mechanic and decision pairs");
   const availablePatterns = new Set(kernels.map((item) => item.interactionPattern));
@@ -150,22 +126,18 @@ export function normalizeSelectedIdeas(
     if (candidateById.get(idea.id)!.interactionPattern !== idea.interactionPattern) {
       throw new Error(`selected idea changed interaction pattern: ${idea.id}`);
     }
-    const audit = auditById.get(idea.id)!;
-    const gatePassed = [audit.loopPass, audit.predictionPass, audit.interactionPass, audit.feasibilityPass]
-      .every(Boolean) && audit.fatalReasons.length === 0;
+    const audit = idea.audit;
+    const allPassed = [audit.loopPass, audit.predictionPass, audit.interactionPass, audit.feasibilityPass]
+      .every(Boolean);
+    const noFatalReasons = audit.fatalReasons.length === 0;
+    if (allPassed !== noFatalReasons) {
+      throw new Error(`red-team verdict is inconsistent for ${idea.id}`);
+    }
     return {
       ...idea,
-      gatePassed,
+      gatePassed: allPassed,
       fatalReasons: [...audit.fatalReasons],
-      audit: {
-        loopPass: audit.loopPass,
-        predictionPass: audit.predictionPass,
-        interactionPass: audit.interactionPass,
-        feasibilityPass: audit.feasibilityPass,
-        fatalReasons: [...audit.fatalReasons],
-        evidence: audit.evidence,
-        recommendedDowngrade: audit.recommendedDowngrade,
-      },
+      audit: { ...audit, fatalReasons: [...audit.fatalReasons] },
     };
   });
 }

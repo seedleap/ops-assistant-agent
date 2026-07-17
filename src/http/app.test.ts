@@ -93,7 +93,6 @@ test("health is public while API routes require a valid JWT", async () => {
       "creator-chat",
       "creator-outreach",
       "idea-inventor",
-      "idea-auditor",
       "idea-converger",
     ]);
     assert.equal(profiles.body.profiles[0].promptVersion, "creator-growth-v2");
@@ -108,7 +107,7 @@ test("health is public while API routes require a valid JWT", async () => {
       "query_work_comments",
       "query_work_prompt",
     ]);
-    assert.deepEqual(profiles.body.profiles.slice(2).map((profile: { toolNames: string[] }) => profile.toolNames), [[], [], []]);
+    assert.deepEqual(profiles.body.profiles.slice(2).map((profile: { toolNames: string[] }) => profile.toolNames), [[], []]);
 
     const documentedIdeaRequest = JSON.parse(await readFile(
       join(process.cwd(), "docs/examples/idea-generate-request.json"),

@@ -34,7 +34,7 @@ pnpm dev
 ASSISTANT_DRY_RUN=true pnpm dev:once
 ```
 
-Creator Chat 和 Outreach 真实调用 Gemini 时需要配置 `GOOGLE_APPLICATION_CREDENTIALS` 与 `GOOGLE_CLOUD_PROJECT`；Idea Inventor、Auditor 和 Converger 默认使用 `azure-openai-responses/gpt-5.5`，需要配置 `AZURE_OPENAI_API_KEY`、`AZURE_OPENAI_BASE_URL` 和 `AZURE_OPENAI_API_VERSION=v1`。生产环境还需要配置 JWT、MCP 和必要的 Langfuse 参数。
+Creator Chat 和 Outreach 真实调用 Gemini 时需要配置 `GOOGLE_APPLICATION_CREDENTIALS` 与 `GOOGLE_CLOUD_PROJECT`；Idea Inventor 和 Converger 默认使用 `azure-openai-responses/gpt-5.5`，需要配置 `AZURE_OPENAI_API_KEY`、`AZURE_OPENAI_BASE_URL` 和 `AZURE_OPENAI_API_VERSION=v1`。生产环境还需要配置 JWT、MCP 和必要的 Langfuse 参数。
 
 ## 常用接口
 
@@ -70,7 +70,7 @@ Profile 定义在 [`src/agent/profiles/`](src/agent/profiles/)；对应系统提
 
 外部调用请直接参考 [`docs/idea-api.md`](docs/idea-api.md)，其中包含经过集成测试的提交与轮询 Case。
 
-`POST /ideas/generate` 使用三个互相隔离的 Pi Agent Profile，依次执行玩法发明、独立审计和规格化收敛；最终由服务端为每个入选 Idea 生成一张竖屏概念图。一次请求最多返回 8 个方向。接口要求携带 8–128 字符的 `Idempotency-Key`，创建成功后立即返回 `202`，客户端通过查询接口读取进度。
+`POST /ideas/generate` 默认使用 Idea Workflow V1：两个互相隔离的 Pi Agent Profile 依次执行玩法内核发散和红队收敛；最终由服务端为每个入选 Idea 生成一张竖屏概念图。一次请求最多返回 8 个方向。接口要求携带 8–128 字符的 `Idempotency-Key`，创建成功后立即返回 `202`，客户端通过查询接口读取进度。
 
 ```http
 POST /ideas/generate
@@ -100,9 +100,9 @@ JWT 模式下，token 的 `sub` 必须与 `userId` 一致。
 
 图片服务凭据读取 `IDEA_IMAGE_BASE_URL` 和 `IDEA_IMAGE_API_KEY`，模型与输出参数统一定义在 `src/agent/profiles/idea-workflow.ts` 的 `IDEA_IMAGE_CONFIG` 中。部署时仍可通过 `IDEA_IMAGE_MODEL`、`IDEA_IMAGE_QUALITY` 临时覆盖，并兼容现有的 `AZURE_IMAGE_BASE_URL`、`AZURE_IMAGE_API_KEY`、`AZURE_IMAGE_DEPLOYMENT`。未配置图片服务时文本结果仍会保存，workflow 状态为 `completed_with_errors`。
 
-development 和 production 默认都使用 S3：生产环境返回 `https://cdn-cf.loopit.me/public/ideas/...`，development 返回 `https://cdn-cf-dev.loopit.me/public/ideas/...`。只有自动化 test 环境默认使用 `DATA_DIR/idea-images/` 本地存储。对象使用不可变缓存头，并按 user/project/workflow/idea 隔离 Key；仅在部署需要覆盖默认 bucket 时设置 `USER_PUBLIC_IMAGES_BUCKET`。
+development 和 production 默认都使用 workspace S3 的专用 `lab/ideas` 命名空间，不再写入正式游戏发布使用的 `public/game`。因为这是内部服务，即使 `NODE_ENV=production`，也固定写入 `leap-workspace-shared-dev/lab/ideas/{workflowId}/{ideaId}.png`，并返回 `https://cdn-cf-dev.loopit.me/lab/ideas/...`。只有自动化 test 环境默认使用 `DATA_DIR/idea-images/` 本地存储。对象使用不可变缓存头，按 workflow 隔离目录，并把 user/project 写入 S3 Metadata。特殊部署需要覆盖基础设施时使用 `IDEA_ASSET_BUCKET`、`IDEA_ASSET_PREFIX` 和 `IDEA_ASSET_CDN_BASE_URL`。
 
-启用现有 `LANGFUSE_ENABLED=true` 后，每次任务只产生一个名为 `idea` 的 trace。发明、审计、收敛和图片生成是其阶段 span；每个 Pi Agent 的 turn、token 与 cost 继续作为对应阶段的子 observation，因此会自动汇总到同一个 trace。根 trace 记录 checkpoint attempt、图片失败数和最终状态，不记录图片 base64 或凭证。
+启用现有 `LANGFUSE_ENABLED=true` 后，每次任务只产生一个名为 `idea` 的 trace。发散、红队收敛和图片生成是其阶段 span；每个 Pi Agent 的 turn、token 与 cost 继续作为对应阶段的子 observation，因此会自动汇总到同一个 trace。根 trace 记录 checkpoint attempt、图片失败数和最终状态，不记录图片 base64 或凭证。
 
 每个 Profile 独立声明：
 

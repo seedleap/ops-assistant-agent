@@ -24,18 +24,7 @@ export const IDEA_IMAGE_CONFIG = {
 export const IDEA_INVENTOR_PROFILE = {
   runType: "interactive",
   traceName: "idea",
-  prompt: { version: "idea-workflow-v2", fileName: "idea.md", section: "idea-inventor" },
-  model: BASE_MODEL,
-  runtime: BASE_RUNTIME,
-  toolNames: [],
-  localSkills: [],
-  skills: [],
-} as const satisfies AgentProfileDefinition;
-
-export const IDEA_AUDITOR_PROFILE = {
-  runType: "interactive",
-  traceName: "idea",
-  prompt: { version: "idea-workflow-v2", fileName: "idea.md", section: "idea-auditor" },
+  prompt: { version: "idea-workflow-v1", fileName: "idea.md", section: "idea-inventor" },
   model: BASE_MODEL,
   runtime: BASE_RUNTIME,
   toolNames: [],
@@ -46,7 +35,7 @@ export const IDEA_AUDITOR_PROFILE = {
 export const IDEA_CONVERGER_PROFILE = {
   runType: "interactive",
   traceName: "idea",
-  prompt: { version: "idea-workflow-v2", fileName: "idea.md", section: "idea-converger" },
+  prompt: { version: "idea-workflow-v1", fileName: "idea.md", section: "idea-converger" },
   model: BASE_MODEL,
   runtime: BASE_RUNTIME,
   toolNames: [],

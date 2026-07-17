@@ -68,7 +68,9 @@ const environmentSchema = z.object({
   IDEA_IMAGE_QUALITY: z.enum(["low", "medium", "high"]).default(IDEA_IMAGE_CONFIG.quality),
   IDEA_IMAGE_TIMEOUT_MS: positiveInteger(90_000),
   IDEA_ASSET_STORAGE: z.enum(["local", "s3"]).optional(),
-  USER_PUBLIC_IMAGES_BUCKET: optionalString,
+  IDEA_ASSET_BUCKET: optionalString,
+  IDEA_ASSET_PREFIX: z.string().trim().min(1).default("lab/ideas"),
+  IDEA_ASSET_CDN_BASE_URL: optionalString.pipe(z.string().url().optional()),
   AZURE_IMAGE_BASE_URL: optionalString.pipe(z.string().url().optional()),
   AZURE_IMAGE_API_KEY: optionalString,
   AZURE_IMAGE_DEPLOYMENT: optionalString,
@@ -359,14 +361,11 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     },
     ideaAssets: {
       storage: env.IDEA_ASSET_STORAGE || (env.NODE_ENV === "test" ? "local" : "s3"),
-      bucket: env.USER_PUBLIC_IMAGES_BUCKET || (env.NODE_ENV === "production"
-        ? "user-public-images-829115578968"
-        : "user-public-images-829115578968-dev"),
-      // Reuse Carmack's IAM-authorized public dist key space.
-      prefix: "public/game",
-      cdnBaseUrl: env.NODE_ENV === "production"
-        ? "https://cdn-cf.loopit.me"
-        : "https://cdn-cf-dev.loopit.me",
+      // This internal service intentionally keeps Idea assets in the dev workspace plane,
+      // including deployments that run with NODE_ENV=production.
+      bucket: env.IDEA_ASSET_BUCKET || "leap-workspace-shared-dev",
+      prefix: env.IDEA_ASSET_PREFIX,
+      cdnBaseUrl: env.IDEA_ASSET_CDN_BASE_URL || "https://cdn-cf-dev.loopit.me",
     },
     modelWhitelist,
     agentProfileOverrides: {
@@ -395,10 +394,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
         },
       },
       "idea-inventor": {
-        model: { provider: ideaProvider, modelId: ideaModelId, thinkingLevel: env.IDEA_THINKING_LEVEL },
-        runtime: { timeoutMs: env.IDEA_TIMEOUT_MS },
-      },
-      "idea-auditor": {
         model: { provider: ideaProvider, modelId: ideaModelId, thinkingLevel: env.IDEA_THINKING_LEVEL },
         runtime: { timeoutMs: env.IDEA_TIMEOUT_MS },
       },

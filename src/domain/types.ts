@@ -134,11 +134,13 @@ export interface IdeaWorkflowRecord {
   userId: string;
   projectId?: string;
   status: "queued" | "running" | "completed" | "completed_with_errors" | "failed" | "canceled";
+  /** `audit` is retained only so persisted Workflow V2 records remain readable. */
   stage: "queued" | "invent" | "audit" | "converge" | "images" | "complete";
   input: Record<string, unknown>;
   ideas: GeneratedIdea[];
   checkpoints: {
     invention?: unknown;
+    /** Legacy Workflow V2 checkpoint; Workflow V1 does not write it. */
     audits?: unknown;
     convergence?: unknown;
   };

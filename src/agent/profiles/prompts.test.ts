@@ -53,15 +53,14 @@ test("creator outreach prompt preserves value gate and no-send contract", async 
   assert.match(prompt, /结构化活动卡片中的活动 ID、任务、奖励、进度、按钮和跳转地址/);
 });
 
-test("idea workflow prompts preserve stage separation and JSON contracts", async () => {
+test("V1 idea workflow prompts preserve divergence and red-team convergence", async () => {
   const inventor = await readProfilePrompt("idea.md", "idea-inventor");
-  const auditor = await readProfilePrompt("idea.md", "idea-auditor");
   const converger = await readProfilePrompt("idea.md", "idea-converger");
 
-  assert.match(inventor, /可证伪/);
-  assert.match(inventor, /3 到 5 秒/);
-  assert.match(auditor, /不能修改候选/);
-  assert.match(auditor, /fatalReasons/);
-  assert.match(converger, /不得在收敛阶段凭空修复候选/);
+  assert.match(inventor, /扩大玩法内核/);
+  assert.match(inventor, /每 2 到 5 秒/);
+  assert.match(inventor, /去掉叙事、IP 或精美美术后就不成立/);
+  assert.match(converger, /红队评审/);
+  assert.match(converger, /不是独立 Agent 审计/);
   assert.match(converger, /imagePrompt/);
 });

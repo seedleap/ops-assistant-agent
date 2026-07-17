@@ -2,7 +2,6 @@ import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AppConfig } from "../../config.js";
-import { DEFAULT_IDEA_PROJECT_ID } from "../../ideas/contracts.js";
 
 export interface StoredIdeaAsset {
   url: string;
@@ -33,11 +32,7 @@ export function ideaAssetKey(config: AppConfig["ideaAssets"], input: {
   const prefix = config.prefix.replace(/^\/+|\/+$/g, "");
   return [
     prefix,
-    safeSegment(input.projectId || DEFAULT_IDEA_PROJECT_ID, DEFAULT_IDEA_PROJECT_ID),
     safeSegment(input.workflowId, "workflow"),
-    "workspace",
-    "dist",
-    "ideas",
     `${safeSegment(input.ideaId, "idea")}.png`,
   ].join("/");
 }
@@ -74,6 +69,8 @@ export class S3IdeaAssetStore implements IdeaAssetStore {
       Metadata: {
         workflow: safeSegment(input.workflowId, "workflow"),
         idea: safeSegment(input.ideaId, "idea"),
+        user: safeSegment(input.userId, "user"),
+        ...(input.projectId ? { project: safeSegment(input.projectId, "project") } : {}),
       },
     }));
     const cdn = this.config.ideaAssets.cdnBaseUrl.replace(/\/$/, "");

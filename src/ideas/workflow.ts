@@ -11,7 +11,6 @@ import { disabledObservability, type Observability } from "../observability/inde
 import { errorMessage } from "../observability/sanitize.js";
 import {
   assertUniqueIds,
-  auditsSchema,
   baseBrief,
   convergenceSchema,
   DEFAULT_IDEA_PROJECT_ID,
@@ -20,9 +19,7 @@ import {
   normalizeSelectedIdeas,
   PROMPT_VERSION,
   selectedIdeaSchema,
-  validateAudits,
   WORKFLOW_VERSION,
-  type Audits,
   type IdeaWorkflowInput,
   type Invention,
   type SelectedIdea,
@@ -31,6 +28,16 @@ import { IdeaImagePipeline } from "./image-pipeline.js";
 import { IdeaStageRunner, type AgentRunner } from "./stage-runner.js";
 
 export type { IdeaWorkflowInput } from "./contracts.js";
+
+const IDEA_STAGE_PROFILE_IDS = ["idea-inventor", "idea-converger"] as const satisfies readonly AgentProfileId[];
+
+function currentWorkflowMetadata(config: AppConfig): IdeaWorkflowRecord["metadata"] {
+  return {
+    workflowVersion: WORKFLOW_VERSION,
+    promptVersion: PROMPT_VERSION,
+    modelIds: [...new Set(IDEA_STAGE_PROFILE_IDS.map((id) => resolveAgentProfileById(config, id).model.modelId))],
+  };
+}
 
 export class IdeaWorkflowConflictError extends Error {
   constructor(message: string) {
@@ -78,12 +85,7 @@ export class IdeaWorkflow {
       checkpoints: {},
       attempt: 0,
       cancelRequested: false,
-      metadata: {
-        workflowVersion: WORKFLOW_VERSION,
-        promptVersion: PROMPT_VERSION,
-        modelIds: [...new Set(["idea-inventor", "idea-auditor", "idea-converger"]
-          .map((id) => resolveAgentProfileById(this.config, id as AgentProfileId).model.modelId))],
-      },
+      metadata: currentWorkflowMetadata(this.config),
       createdAt: now,
       updatedAt: now,
     };
@@ -116,13 +118,15 @@ export class IdeaWorkflow {
     if (!["failed", "completed_with_errors", "canceled"].includes(record.status)) {
       throw new IdeaWorkflowConflictError(`workflow cannot be retried from status ${record.status}`);
     }
-    const ideas = record.ideas.map((idea) => idea.image.status === "failed"
+    const versionChanged = record.metadata.workflowVersion !== WORKFLOW_VERSION;
+    const ideas = versionChanged ? [] : record.ideas.map((idea) => idea.image.status === "failed"
       ? { ...idea, image: { status: "pending" as const } }
       : idea);
     await this.store.updateIdeaWorkflow(id, {
       status: "queued",
-      stage: record.checkpoints.convergence ? "images" : record.stage,
+      stage: versionChanged ? "queued" : record.checkpoints.convergence ? "images" : record.stage,
       ideas,
+      ...(versionChanged ? { checkpoints: {}, metadata: currentWorkflowMetadata(this.config) } : {}),
       cancelRequested: false,
       error: undefined,
       completedAt: undefined,
@@ -161,6 +165,15 @@ export class IdeaWorkflow {
   private async execute(id: string): Promise<void> {
     let record = this.store.getIdeaWorkflow(id);
     if (!record || record.status === "canceled") return;
+    if (record.metadata.workflowVersion !== WORKFLOW_VERSION) {
+      await this.store.updateIdeaWorkflow(id, {
+        stage: "queued",
+        ideas: [],
+        checkpoints: {},
+        metadata: currentWorkflowMetadata(this.config),
+      });
+      record = this.store.getIdeaWorkflow(id)!;
+    }
     const attempt = record.attempt + 1;
     await this.store.updateIdeaWorkflow(id, {
       status: "running",
@@ -173,7 +186,7 @@ export class IdeaWorkflow {
 
     try {
       const desiredCount = Math.max(1, Math.min(8, Number(record.input.requestedCount) || 4));
-      const kernelCount = Math.min(16, Math.max(desiredCount + 4, Math.ceil(desiredCount * 1.5)));
+      const kernelCount = Math.min(16, Math.max(desiredCount + 6, Math.ceil(desiredCount * 1.5)));
       const brief = record.input;
       this.throwIfCanceled(record.id);
 
@@ -191,39 +204,18 @@ export class IdeaWorkflow {
         await this.store.updateIdeaWorkflow(id, { stage: "invent" });
         invention = await this.structuredStage(
           trace, record, "idea-inventor", "invent", inventionSchema,
-          `生成 ${kernelCount} 个不同的玩法内核。输入：\n${JSON.stringify(brief)}\n\n返回 {"kernels":[...]}。每项字段必须是 id、title、mechanicFamily、interactionPattern、observation、decision、action、stateTransition、feedback、loopContract、predictionContract、visibleSignal、predictionWindow、nextDecision、failureRecovery、whyFun、prototypeTest。interactionPattern 只能是 tap-choice、timing、drag-track、swipe-path、hold-release、sequence、resource-allocation、spatial-arrangement、other 之一。visibleSignal 写玩家能直接看到的预告，predictionWindow 写信号领先结果多久，nextDecision 写本轮反馈如何产生下一次不同判断。候选应尽量覆盖不同 interactionPattern。`,
-          (value) => assertUniqueIds(value.kernels, "kernels"),
+          `先为下面的命题发散 ${kernelCount} 个玩法内核，不要直接写成包装完整的游戏提案。\n\n创作命题：\n${JSON.stringify(brief)}\n\n返回 {"kernels":[...]}，必须正好 ${kernelCount} 项。每项字段必须是 id、title、mechanicFamily、interactionPattern、mechanicAnchor、coreAction、gameState、playerDecision、tension、failAndRecovery、masteryGrowth、variationSource、themeBinding、whyFun、antiClone。interactionPattern 只能是 tap-choice、timing、drag-track、swipe-path、hold-release、sequence、resource-allocation、spatial-arrangement、other 之一。覆盖空间、时机、观察、排序、路径、组合、资源分配、风险决策等不同机制家族。以下方向直接淘汰：只点击光点、爱心或目标来点亮或攒能量；只有收集和进度条没有判断；把不同颜色、角色、轨道或节拍当成玩法差异；只能靠叙事、IP 或精美美术才有趣。只输出 JSON，不要解释或 Markdown。`,
+          (value) => {
+            assertUniqueIds(value.kernels, "kernels");
+            if (value.kernels.length !== kernelCount) {
+              throw new Error(`Idea Agent returned ${value.kernels.length} kernels; expected ${kernelCount}`);
+            }
+          },
         );
         await this.store.updateIdeaWorkflow(id, { checkpoints: { ...record.checkpoints, invention } });
         record = this.store.getIdeaWorkflow(id)!;
       }
       assertUniqueIds(invention.kernels, "kernels");
-      this.throwIfCanceled(id);
-
-      let auditResult: Audits | undefined;
-      if (record.checkpoints.audits) {
-        try {
-          auditResult = auditsSchema.parse(record.checkpoints.audits);
-          validateAudits(invention.kernels, auditResult.audits);
-        } catch {
-          await this.store.updateIdeaWorkflow(id, {
-            checkpoints: { invention },
-            ideas: [],
-          });
-          record = this.store.getIdeaWorkflow(id)!;
-        }
-      }
-      if (!auditResult) {
-        await this.store.updateIdeaWorkflow(id, { stage: "audit" });
-        auditResult = await this.structuredStage(
-          trace, record, "idea-auditor", "audit", auditsSchema,
-          `逐项审计候选。创作命题：\n${JSON.stringify(brief)}\n\n候选：\n${JSON.stringify(invention.kernels)}\n\n返回 {"audits":[...]}。每项字段必须是 ideaId、loopPass、predictionPass、interactionPass、feasibilityPass、fatalReasons、evidence、recommendedDowngrade。ideaId 对应候选 id。fatalReasons 必须始终是 JSON 数组，无问题时返回 []，禁止返回字符串；evidence 必须引用候选中的具体机制；recommendedDowngrade 写审核失败时不改变核心玩法的最小降级建议，通过时写“无需降级”。loopContract 若只是整局目标而非 3-5 秒观察→判断→动作→反馈闭环，loopPass 必须为 false；visibleSignal 不可见、predictionWindow 没有明确提前量或 nextDecision 不产生新判断时，predictionPass 必须为 false。任何 fatalReasons 都必须至少对应一个 false；任何 false 都必须说明 fatalReasons。`,
-          (value) => validateAudits(invention!.kernels, value.audits),
-        );
-        await this.store.updateIdeaWorkflow(id, { checkpoints: { ...record.checkpoints, invention, audits: auditResult } });
-        record = this.store.getIdeaWorkflow(id)!;
-      }
-      validateAudits(invention.kernels, auditResult.audits);
       this.throwIfCanceled(id);
 
       let selected: SelectedIdea[];
@@ -233,11 +225,10 @@ export class IdeaWorkflow {
             z.array(selectedIdeaSchema).parse(record.checkpoints.convergence),
             desiredCount,
             invention.kernels,
-            auditResult.audits,
           );
         } catch {
           await this.store.updateIdeaWorkflow(id, {
-            checkpoints: { invention, audits: auditResult },
+            checkpoints: { invention },
             ideas: [],
           });
           record = this.store.getIdeaWorkflow(id)!;
@@ -250,13 +241,13 @@ export class IdeaWorkflow {
         await this.store.updateIdeaWorkflow(id, { stage: "converge" });
         const convergence = await this.structuredStage(
           trace, record, "idea-converger", "converge", convergenceSchema,
-          `从候选中选择 ${desiredCount} 个方向并规格化。创作命题：\n${JSON.stringify(brief)}\n\n候选：\n${JSON.stringify(invention.kernels)}\n\n审计：\n${JSON.stringify(auditResult.audits)}\n\n返回 {"ideas":[...]}，必须正好 ${desiredCount} 项。每项字段必须是 id、title、summary、mechanic、interactionPattern、playerGoal、playerAction、gameState、decision、rules、loop、failState、feedback、failureRecovery、whyFun、prototypeTest、difficultyCurve、variationSource、first10Seconds、funRisks、bindingRationale、imagePrompt。玩法字段必须具体到对象、状态、阈值或条件；first10Seconds 写清前 10 秒发生什么；difficultyCurve 写 30-60 秒内如何至少升级两次；variationSource 写下一局为何不同；funRisks 写最需要真人验证的好玩风险。interactionPattern 必须与原候选一致；当候选中存在足够多不同 interactionPattern 时，最终结果不得重复 interactionPattern。gatePassed、fatalReasons 和完整 audit 由程序根据审计结果附加，不要输出。只输出 JSON，不要解释或 Markdown。`,
-          (value) => { normalizeSelectedIdeas(value.ideas, desiredCount, invention!.kernels, auditResult!.audits); },
+          `先红队淘汰伪玩法，再从候选中选出 ${desiredCount} 个真正不同、最可能好玩的方向并规格化。\n\n创作命题：\n${JSON.stringify(brief)}\n\n候选玩法内核：\n${JSON.stringify(invention.kernels)}\n\n选择硬门槛：\n1. 3-5 秒能理解第一次有效操作，但不是无脑点击。\n2. 玩家判断会改变局面，存在成功、近失误、失败和恢复。\n3. 结果能由可见信号合理预判。\n4. 30-60 秒内至少出现两次难度或策略升级。\n5. 第二局的局面、目标、资源或路线会变化，而不只是分数重置。\n6. 去掉主题包装后灰盒仍成立；主题又能自然改变规则或反馈。\n7. ${desiredCount} 个方向的底层动作与判断不得重复，不能用不同颜色、角色或轨道冒充差异。\n\n返回 {"ideas":[...]}，必须正好 ${desiredCount} 项。每项字段必须是 id、title、summary、mechanic、interactionPattern、playerGoal、playerAction、gameState、decision、rules、loop、failState、feedback、failureRecovery、whyFun、prototypeTest、difficultyCurve、variationSource、first10Seconds、funRisks、bindingRationale、imagePrompt、audit。id 必须沿用候选 id，interactionPattern 必须与候选一致。audit 必须包含 loopPass、predictionPass、interactionPass、feasibilityPass、fatalReasons、evidence、recommendedDowngrade；它是本次 V1 红队收敛判断，不是独立 Agent 审计。除 audit.fatalReasons 必须为字符串数组外，rules、loop、difficultyCurve、funRisks、audit.evidence 和其他文本字段都必须是单个 JSON 字符串，不得返回数组。玩法字段必须具体到对象、状态、阈值或条件；imagePrompt 必须描述真实竖屏游戏画面和可操作信息。不要输出 gatePassed，它由程序根据 audit 推导。只输出 JSON，不要解释或 Markdown。`,
+          (value) => { normalizeSelectedIdeas(value.ideas, desiredCount, invention!.kernels); },
         );
-        selected = normalizeSelectedIdeas(convergence.ideas, desiredCount, invention.kernels, auditResult.audits);
+        selected = normalizeSelectedIdeas(convergence.ideas, desiredCount, invention.kernels);
         const pendingIdeas = selected.map((idea) => ({ ...idea, image: { status: "pending" as const } }));
         await this.store.updateIdeaWorkflow(id, {
-          checkpoints: { ...record.checkpoints, invention, audits: auditResult, convergence: selected },
+          checkpoints: { invention, convergence: selected },
           ideas: pendingIdeas,
         });
         record = this.store.getIdeaWorkflow(id)!;
@@ -299,7 +290,7 @@ export class IdeaWorkflow {
     record: IdeaWorkflowRecord,
     profileId: AgentProfileId,
     stage: string,
-    schema: z.ZodType<T>,
+    schema: z.ZodType<T, z.ZodTypeDef, unknown>,
     prompt: string,
     validate?: (value: T) => void,
   ): Promise<T> {

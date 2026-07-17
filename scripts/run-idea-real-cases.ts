@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { parse } from "dotenv";
 import pino from "pino";
 import request from "supertest";
+import type { OpsAssistant as OpsAssistantType } from "../src/agent/assistant.js";
 import type { IdeaWorkflowRecord } from "../src/domain/types.js";
 
 Object.assign(process.env, parse(await readFile(resolve(".env"), "utf8")));
@@ -64,10 +65,17 @@ const config = loadConfig();
 const store = await JsonStore.open(config.dataDir);
 const observability = initObservability(config.langfuse);
 const assistant = new OpsAssistant(config, observability);
+const stageProfileCalls: string[] = [];
+const ideaAgent = {
+  run: async (input: Parameters<OpsAssistantType["run"]>[0]) => {
+    stageProfileCalls.push(input.profileId || "");
+    return assistant.run(input);
+  },
+};
 const workflow = new IdeaWorkflow(
   config,
   store,
-  assistant,
+  ideaAgent,
   new AzureIdeaImageGenerator(config),
   createIdeaAssetStore(config),
   observability,
@@ -144,6 +152,7 @@ if (requestedCase && selectedCases.length === 0) {
 try {
   for (const item of selectedCases) {
     const startedAt = Date.now();
+    const firstStageCallIndex = stageProfileCalls.length;
     process.stdout.write(`CASE_START ${item.name}\n`);
     try {
       const submitted = await request(app)
@@ -162,13 +171,18 @@ try {
           await new Promise((resolvePoll) => setTimeout(resolvePoll, retryAfterSeconds * 1_000));
           continue;
         }
-        if (polled.status !== 200) throw new Error(`Idea status route returned ${polled.status}`);
+        if (polled.status !== 200) {
+          throw new Error(
+            `Idea status route returned ${polled.status}: ${JSON.stringify(polled.body)}`,
+          );
+        }
         record = polled.body.workflow;
         if (["completed", "completed_with_errors", "failed", "canceled"].includes(record!.status)) break;
         await new Promise((resolvePoll) => setTimeout(resolvePoll, 1_000));
       }
       if (!record) throw new Error("Idea route polling timed out");
       const internalRecord = store.getIdeaWorkflow(workflowId)!;
+      const caseStageCalls = stageProfileCalls.slice(firstStageCallIndex);
       const titles = record.ideas.map((idea) => idea.title);
       const signatures = record.ideas.map((idea) => `${idea.mechanic}\0${idea.decision}`.toLowerCase());
       const imageChecks = await Promise.all(record.ideas.map(async (idea) => {
@@ -212,7 +226,7 @@ try {
           idea.playerGoal, idea.gameState, idea.rules, idea.failState, idea.feedback,
           idea.difficultyCurve, idea.variationSource, idea.first10Seconds, idea.funRisks, idea.bindingRationale,
         ].every((value) => typeof value === "string" && value.trim().length > 0)),
-        allAuditsComplete: record.ideas.every((idea) =>
+        allRedTeamAssessmentsComplete: record.ideas.every((idea) =>
           typeof idea.audit?.loopPass === "boolean" && typeof idea.audit?.predictionPass === "boolean" &&
           typeof idea.audit?.interactionPass === "boolean" && typeof idea.audit?.feasibilityPass === "boolean" &&
           Boolean(idea.audit?.evidence) && Boolean(idea.audit?.recommendedDowngrade)),
@@ -221,8 +235,12 @@ try {
           "idempotencyKey", "inputHash", "checkpoints", "cancelRequested", "metadata", "attempt",
         ].includes(key)),
         allCheckpointsSaved: Boolean(
-          internalRecord.checkpoints.invention && internalRecord.checkpoints.audits && internalRecord.checkpoints.convergence,
+          internalRecord.checkpoints.invention && internalRecord.checkpoints.convergence,
         ),
+        workflowVersionV1: internalRecord.metadata.workflowVersion === "idea-workflow-v1" &&
+          internalRecord.metadata.promptVersion === "idea-workflow-v1",
+        v1ProfileStagesOnly: caseStageCalls.includes("idea-inventor") && caseStageCalls.includes("idea-converger") &&
+          caseStageCalls.every((profileId) => profileId === "idea-inventor" || profileId === "idea-converger"),
       };
       const passed = Object.values(checks).every(Boolean);
       results.push({
@@ -234,6 +252,7 @@ try {
         checks,
         rejectedCount: record.ideas.filter((idea) => !idea.gatePassed).length,
         titles,
+        stageProfileCalls: caseStageCalls,
         ideas: record.ideas,
         images: imageChecks,
         error: record.error,

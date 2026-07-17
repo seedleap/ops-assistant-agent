@@ -39,8 +39,8 @@ function testConfig(dataDir: string): AppConfig {
     },
     ideaAssets: {
       storage: "local",
-      bucket: "user-public-images-829115578968-dev",
-      prefix: "public/ideas",
+      bucket: "leap-workspace-shared-dev",
+      prefix: "lab/ideas",
       cdnBaseUrl: "https://cdn-cf-dev.loopit.me",
     },
     modelWhitelist: ["google-vertex/gemini-3-flash-preview"],

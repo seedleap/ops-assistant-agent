@@ -3,20 +3,21 @@ import test from "node:test";
 import {
   normalizeSelectedIdeas,
   parseJsonOutput,
-  validateAudits,
-  type Audits,
+  selectedIdeaDraftSchema,
   type Invention,
-  type SelectedIdea,
+  type SelectedIdeaDraft,
 } from "./contracts.js";
 
-const kernel = {
-  id: "k1", title: "Kernel", mechanicFamily: "timing", interactionPattern: "timing" as const, observation: "timer",
-  decision: "choose", action: "tap", stateTransition: "resolve", feedback: "pulse",
-  loopContract: "four seconds", predictionContract: "one second warning",
-  visibleSignal: "countdown ring", predictionWindow: "one second", nextDecision: "target moves",
-  failureRecovery: "retry", whyFun: "mastery", prototypeTest: "three loops",
+const kernel: Invention["kernels"][number] = {
+  id: "k1", title: "Kernel", mechanicFamily: "timing", interactionPattern: "timing",
+  mechanicAnchor: "warned targets become active", coreAction: "tap", gameState: "warned or active",
+  playerDecision: "choose before timeout", tension: "wait for certainty or act early",
+  failAndRecovery: "a miss resets one target", masteryGrowth: "learn warning order",
+  variationSource: "targets shuffle", themeBinding: "theme controls target states",
+  whyFun: "fast mastery", antiClone: "warning order changes the decision",
 };
-const selected: SelectedIdea = {
+
+const selected: SelectedIdeaDraft = {
   id: "k1", title: "Idea", summary: "Summary", mechanic: "timed choice", interactionPattern: "timing",
   playerGoal: "score before timeout", playerAction: "tap", gameState: "target is warned or active",
   decision: "choose before timeout", rules: "only warned targets score", loop: "observe and resolve",
@@ -24,7 +25,7 @@ const selected: SelectedIdea = {
   failureRecovery: "retry", whyFun: "mastery", prototypeTest: "three loops",
   difficultyCurve: "warnings shorten twice", variationSource: "targets shuffle",
   first10Seconds: "guided target then normal loops", funRisks: "choice may feel automatic",
-  bindingRationale: "theme controls target state", gatePassed: true, fatalReasons: [],
+  bindingRationale: "theme controls target state",
   audit: {
     loopPass: true, predictionPass: true, interactionPass: true, feasibilityPass: true,
     fatalReasons: [], evidence: "complete loop", recommendedDowngrade: "none",
@@ -32,29 +33,31 @@ const selected: SelectedIdea = {
   imagePrompt: "portrait board",
 };
 
-test("audit coverage rejects missing candidates", () => {
-  const kernels: Invention["kernels"] = [kernel, { ...kernel, id: "k2" }];
-  const audits: Audits["audits"] = [{
-    ideaId: "k1", loopPass: true, predictionPass: true, interactionPass: true,
-    feasibilityPass: true, fatalReasons: [], evidence: "complete loop", recommendedDowngrade: "none",
-  }];
-  assert.throws(() => validateAudits(kernels, audits), /missing=k2/);
+test("V1 red-team verdict rejects pass flags that contradict fatal reasons", () => {
+  const inconsistent: SelectedIdeaDraft = {
+    ...selected,
+    audit: {
+      ...selected.audit,
+      predictionPass: false,
+      fatalReasons: [],
+      evidence: "signal is not visible",
+    },
+  };
+  assert.throws(() => normalizeSelectedIdeas([inconsistent], 1, [kernel]), /verdict is inconsistent/);
 });
 
-test("audit verdict rejects pass flags that contradict fatal reasons", () => {
-  const inconsistent: Audits["audits"] = [{
-    ideaId: "k1", loopPass: true, predictionPass: true, interactionPass: true,
-    feasibilityPass: true, fatalReasons: ["theme mismatch"], evidence: "off brief", recommendedDowngrade: "remove theme dependency",
-  }];
-  assert.throws(() => validateAudits([kernel], inconsistent), /verdict is inconsistent/);
-});
-
-test("selection gate is derived from audit instead of model claims", () => {
-  const audits: Audits["audits"] = [{
-    ideaId: "k1", loopPass: true, predictionPass: false, interactionPass: true,
-    feasibilityPass: true, fatalReasons: ["signal is not visible"], evidence: "no warning", recommendedDowngrade: "add a warning",
-  }];
-  const [normalized] = normalizeSelectedIdeas([selected], 1, [kernel], audits);
+test("V1 selection gate is derived from the converger red-team result", () => {
+  const rejected: SelectedIdeaDraft = {
+    ...selected,
+    audit: {
+      ...selected.audit,
+      predictionPass: false,
+      fatalReasons: ["signal is not visible"],
+      evidence: "no warning",
+      recommendedDowngrade: "add a warning",
+    },
+  };
+  const [normalized] = normalizeSelectedIdeas([rejected], 1, [kernel]);
   assert.equal(normalized.gatePassed, false);
   assert.deepEqual(normalized.fatalReasons, ["signal is not visible"]);
   assert.equal(normalized.audit.predictionPass, false);
@@ -62,15 +65,29 @@ test("selection gate is derived from audit instead of model claims", () => {
   assert.equal(normalized.audit.recommendedDowngrade, "add a warning");
 });
 
-test("selection rejects duplicate mechanic and decision pairs", () => {
-  const second = { ...selected, id: "k2", title: "Idea 2" };
-  const audits: Audits["audits"] = ["k1", "k2"].map((ideaId) => ({
-    ideaId, loopPass: true, predictionPass: true, interactionPass: true,
-    feasibilityPass: true, fatalReasons: [], evidence: "complete loop", recommendedDowngrade: "none",
-  }));
+test("V1 selection rejects duplicate mechanic and decision pairs", () => {
+  const second: SelectedIdeaDraft = { ...selected, id: "k2", title: "Idea 2" };
   assert.throws(
-    () => normalizeSelectedIdeas([selected, second], 2, [kernel, { ...kernel, id: "k2", interactionPattern: "drag-track" }], audits),
+    () => normalizeSelectedIdeas(
+      [selected, second],
+      2,
+      [kernel, { ...kernel, id: "k2", interactionPattern: "drag-track" }],
+    ),
     /duplicate mechanic and decision pairs/,
+  );
+});
+
+test("V1 contracts normalize string-list fields without accepting arbitrary objects", () => {
+  const normalized = selectedIdeaDraftSchema.parse({
+    ...selected,
+    rules: ["rule one", "rule two"],
+    audit: { ...selected.audit, evidence: ["visible warning", "state changes"] },
+  });
+  assert.equal(normalized.rules, "rule one；rule two");
+  assert.equal(normalized.audit.evidence, "visible warning；state changes");
+  assert.throws(
+    () => selectedIdeaDraftSchema.parse({ ...selected, rules: [{ text: "not accepted" }] }),
+    /Expected string/,
   );
 });
 

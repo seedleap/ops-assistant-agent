@@ -17,7 +17,7 @@ interface StageInput<T> {
   record: IdeaWorkflowRecord;
   profileId: AgentProfileId;
   stage: string;
-  schema: z.ZodType<T>;
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>;
   prompt: string;
   validate?: (value: T) => void;
 }
@@ -80,24 +80,20 @@ export class IdeaStageRunner {
 }
 
 function dryRunStage(stage: string, prompt: string): string {
-  if (stage === "invent") return JSON.stringify({ kernels: Array.from({ length: 8 }, (_, index) => ({
-    id: `dry-${index + 1}`, title: `Dry-run Idea ${index + 1}`, mechanicFamily: index % 2 ? "timing" : "spatial",
-    interactionPattern: index % 2 ? "timing" : "drag-track",
-    observation: "A visible target changes state.", decision: "Choose the next target before the timer closes.",
-    action: "Tap or drag the selected object.", stateTransition: "The target resolves and the next target appears.",
-    feedback: "Immediate success or recoverable miss feedback.", loopContract: "A complete decision loop every 4 seconds.",
-    predictionContract: "A visible countdown appears 1 second before resolution.",
-    visibleSignal: "A countdown ring shrinks around the next target.", predictionWindow: "1 second",
-    nextDecision: "The resolved target changes the position and timing of the next one.",
-    failureRecovery: "A miss resets only the current target.",
-    whyFun: "Fast readable decisions create mastery.", prototypeTest: "Test whether new players complete three loops in 30 seconds.",
-  })) });
-  if (stage === "audit") return JSON.stringify({ audits: Array.from({ length: 8 }, (_, index) => ({
-    ideaId: `dry-${index + 1}`, loopPass: true, predictionPass: true, interactionPass: true,
-    feasibilityPass: true, fatalReasons: [],
-    evidence: "Visible countdown, direct input, deterministic resolution and immediate retry are specified.",
-    recommendedDowngrade: "No downgrade needed.",
-  })) });
+  if (stage === "invent") {
+    const kernelCount = Number(prompt.match(/发散\s+(\d+)\s+个玩法内核/)?.[1] || 8);
+    return JSON.stringify({ kernels: Array.from({ length: kernelCount }, (_, index) => ({
+      id: `dry-${index + 1}`, title: `Dry-run Idea ${index + 1}`, mechanicFamily: index % 2 ? "timing" : "spatial",
+      interactionPattern: index % 2 ? "timing" : "drag-track",
+      mechanicAnchor: "A visible target changes state before it can be resolved.",
+      coreAction: "Tap or drag the selected object.", gameState: "Targets alternate between warned, active and resolved.",
+      playerDecision: "Choose the next target before the timer closes.", tension: "Waiting improves certainty but reduces time.",
+      failAndRecovery: "A miss resets only the current target.", masteryGrowth: "Players learn warning order and timing.",
+      variationSource: "Target positions and warning order change each run.",
+      themeBinding: "The theme controls target state and feedback.", whyFun: "Fast readable decisions create mastery.",
+      antiClone: "The changing warning order prevents the loop from becoming a fixed tap sequence.",
+    })) });
+  }
   const count = Number(prompt.match(/正好\s+(\d+)\s+项/)?.[1] || 4);
   return JSON.stringify({ ideas: Array.from({ length: count }, (_, index) => ({
     id: `dry-${index + 1}`, title: `Dry-run Idea ${index + 1}`, summary: "A short, visible decision loop for a vertical mobile game.",
@@ -115,7 +111,12 @@ function dryRunStage(stage: string, prompt: string): string {
     first10Seconds: "One guided target teaches the signal, then three normal four-second loops begin.",
     funRisks: "Verify that reading the warning creates a real choice instead of a reflex tap.",
     bindingRationale: "The visible target theme directly controls state and feedback.",
-    gatePassed: true, fatalReasons: [],
+    audit: {
+      loopPass: true, predictionPass: true, interactionPass: true, feasibilityPass: true,
+      fatalReasons: [],
+      evidence: "Visible warning, consequential input, state change and immediate recovery are specified.",
+      recommendedDowngrade: "No downgrade needed.",
+    },
     imagePrompt: "A clean portrait game board with targets, countdown, score and a visible successful tap.",
   })) });
 }

@@ -30,36 +30,22 @@ test("IdeaWorkflow runs isolated Pi profiles and returns text plus image", async
       run: async (input: { profileId?: string }) => {
         calls.push(input.profileId || "");
         if (input.profileId === "idea-inventor") {
-          return JSON.stringify({ kernels: Array.from({ length: 6 }, (_, index) => ({
+          return JSON.stringify({ kernels: Array.from({ length: 8 }, (_, index) => ({
             id: `k${index + 1}`,
             title: `Kernel ${index + 1}`,
             mechanicFamily: "timing",
             interactionPattern: index % 2 ? "timing" : "drag-track",
-            observation: "visible timer",
-            decision: "choose a target",
-            action: "tap",
-            stateTransition: "target resolves",
-            feedback: "success pulse",
-            loopContract: "four second loop",
-            predictionContract: "one second visible warning",
-            visibleSignal: "countdown ring",
-            predictionWindow: "one second",
-            nextDecision: "the next target changes position",
-            failureRecovery: "retry current target",
+            mechanicAnchor: "warned targets become active",
+            coreAction: "tap",
+            gameState: "target is warned or active",
+            playerDecision: "choose a target before timeout",
+            tension: "wait for certainty or act early",
+            failAndRecovery: "retry current target",
+            masteryGrowth: "learn the warning order",
+            variationSource: "target positions shuffle",
+            themeBinding: "theme controls target state",
             whyFun: "fast mastery",
-            prototypeTest: "complete three loops",
-          })) });
-        }
-        if (input.profileId === "idea-auditor") {
-          return JSON.stringify({ audits: Array.from({ length: 6 }, (_, index) => ({
-            ideaId: `k${index + 1}`,
-            loopPass: true,
-            predictionPass: true,
-            interactionPass: true,
-            feasibilityPass: true,
-            fatalReasons: [],
-            evidence: "visible timer and deterministic tap",
-            recommendedDowngrade: "none",
+            antiClone: "warning order changes the decision",
           })) });
         }
         return JSON.stringify({ ideas: Array.from({ length: 2 }, (_, index) => ({
@@ -84,6 +70,15 @@ test("IdeaWorkflow runs isolated Pi profiles and returns text plus image", async
           first10Seconds: "guided target then normal loops",
           funRisks: "choice may feel automatic",
           bindingRationale: "theme controls target state",
+          audit: {
+            loopPass: true,
+            predictionPass: true,
+            interactionPass: true,
+            feasibilityPass: true,
+            fatalReasons: [],
+            evidence: "visible timer and deterministic tap",
+            recommendedDowngrade: "none",
+          },
           imagePrompt: "portrait game board with a visible timer",
         })) });
       },
@@ -112,7 +107,7 @@ test("IdeaWorkflow runs isolated Pi profiles and returns text plus image", async
     const service = new IdeaWorkflow(config, store, agent, images, assets);
     const workflow = await service.run(input);
 
-    assert.deepEqual(calls, ["idea-inventor", "idea-auditor", "idea-converger"]);
+    assert.deepEqual(calls, ["idea-inventor", "idea-converger"]);
     assert.equal(workflow.status, "completed");
     assert.equal(workflow.projectId, "idea_create");
     assert.equal(workflow.ideas.length, 2);
@@ -122,8 +117,9 @@ test("IdeaWorkflow runs isolated Pi profiles and returns text plus image", async
     assert.equal(workflow.ideas[0].gatePassed, true);
     assert.equal(workflow.ideas[0].audit.evidence, "visible timer and deterministic tap");
     assert.equal(workflow.ideas[0].playerGoal, "score before timeout");
+    assert.equal(workflow.metadata.workflowVersion, "idea-workflow-v1");
     assert.ok(workflow.checkpoints.invention);
-    assert.ok(workflow.checkpoints.audits);
+    assert.equal(workflow.checkpoints.audits, undefined);
     assert.ok(workflow.checkpoints.convergence);
     assert.equal(store.getIdeaWorkflow(workflow.id)?.stage, "complete");
 
@@ -146,7 +142,7 @@ test("IdeaWorkflow runs isolated Pi profiles and returns text plus image", async
     });
     assert.equal(retried.attempt, 2);
     assert.equal(retried.ideas[0].image.status, "completed");
-    assert.deepEqual(calls, ["idea-inventor", "idea-auditor", "idea-converger"]);
+    assert.deepEqual(calls, ["idea-inventor", "idea-converger"]);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }
