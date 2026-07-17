@@ -8,10 +8,9 @@ const BASE_RUNTIME = {
 } as const;
 
 const BASE_MODEL = {
-  provider: "google-vertex",
-  modelId: "gemini-3.1-pro-preview",
+  provider: "azure-openai-responses",
+  modelId: "gpt-5.5",
   thinkingLevel: "high",
-  temperature: 0.7,
 } as const;
 
 export const IDEA_INVENTOR_PROFILE = {
@@ -29,7 +28,7 @@ export const IDEA_AUDITOR_PROFILE = {
   runType: "interactive",
   traceName: "idea",
   prompt: { version: "idea-workflow-v2", fileName: "idea-auditor.md" },
-  model: { ...BASE_MODEL, temperature: 0.2 },
+  model: BASE_MODEL,
   runtime: BASE_RUNTIME,
   toolNames: [],
   localSkills: [],
@@ -40,7 +39,7 @@ export const IDEA_CONVERGER_PROFILE = {
   runType: "interactive",
   traceName: "idea",
   prompt: { version: "idea-workflow-v2", fileName: "idea-converger.md" },
-  model: { ...BASE_MODEL, temperature: 0.3 },
+  model: BASE_MODEL,
   runtime: BASE_RUNTIME,
   toolNames: [],
   localSkills: [],

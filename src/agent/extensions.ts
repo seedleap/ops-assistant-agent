@@ -30,6 +30,10 @@ export function createModelParametersExtension(profile: AgentProfile): Extension
         };
       }
 
+      // The deployed Azure Responses GPT-5.5 rejects temperature when reasoning
+      // is enabled, so leave that provider's payload unchanged.
+      if (profile.model.provider === "azure-openai-responses") return;
+
       if (profile.model.provider === "openai" || profile.model.provider === "openrouter") {
         return { ...payload, temperature: profile.model.temperature };
       }

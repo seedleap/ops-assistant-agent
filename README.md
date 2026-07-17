@@ -4,7 +4,7 @@
 
 ## 当前能力
 
-- Gemini / Vertex 模型调用，支持 Profile 级模型、参数、提示词和工具白名单。
+- Gemini / Vertex 与 Azure OpenAI Responses 模型调用，支持 Profile 级模型、参数、提示词和工具白名单。
 - `/im/messages` 一次性返回 JSON。
 - `/im/stream` 以 SSE 流式返回文本、工具调用、用量和最终结果。
 - 对话按 `userId + imThreadId` 持久化，可继续已有 Session。
@@ -34,7 +34,7 @@ pnpm dev
 ASSISTANT_DRY_RUN=true pnpm dev:once
 ```
 
-真实调用 Gemini 需要配置 `GOOGLE_APPLICATION_CREDENTIALS` 和 `GOOGLE_CLOUD_PROJECT`。生产环境还需要配置 JWT、MCP 和必要的 Langfuse 参数。
+Creator Chat 和 Outreach 真实调用 Gemini 时需要配置 `GOOGLE_APPLICATION_CREDENTIALS` 与 `GOOGLE_CLOUD_PROJECT`；Idea Inventor、Auditor 和 Converger 默认使用 `azure-openai-responses/gpt-5.5`，需要配置 `AZURE_OPENAI_API_KEY`、`AZURE_OPENAI_BASE_URL` 和 `AZURE_OPENAI_API_VERSION=v1`。生产环境还需要配置 JWT、MCP 和必要的 Langfuse 参数。
 
 ## 常用接口
 

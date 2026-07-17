@@ -10,7 +10,7 @@ export interface AgentModelConfig {
   provider: string;
   modelId: string;
   thinkingLevel: AgentThinkingLevel;
-  temperature: number;
+  temperature?: number;
 }
 
 export interface AgentRuntimeConfig {

@@ -40,6 +40,9 @@ test("loadConfig parses explicit runtime values", () => {
   assert.equal(config.agentProfileOverrides["creator-chat"]?.model?.temperature, 0.4);
   assert.equal(config.agentProfileOverrides["creator-chat"]?.runtime?.maxTurns, 10);
   assert.equal(config.agentProfileOverrides["creator-outreach"]?.runtime?.maxTurns, 6);
+  assert.equal(config.agentProfileOverrides["idea-inventor"]?.model?.provider, "azure-openai-responses");
+  assert.equal(config.agentProfileOverrides["idea-inventor"]?.model?.modelId, "gpt-5.5");
+  assert.ok(config.modelWhitelist.includes("azure-openai-responses/gpt-5.5"));
   assert.match(config.agentPromptsDir, /config\/agent-profiles$/);
 });
 

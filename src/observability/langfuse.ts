@@ -99,7 +99,7 @@ export function createAgentRunTrace(
       modelProvider: profile.model.provider,
       modelId: profile.model.modelId,
       thinkingLevel: profile.model.thinkingLevel,
-      temperature: profile.model.temperature,
+      ...(profile.model.temperature !== undefined ? { temperature: profile.model.temperature } : {}),
       maxTurns: profile.runtime.maxTurns,
     },
   }, { asType: "agent" });
@@ -120,7 +120,7 @@ export function createAgentRunTrace(
         input: sanitizeTraceValue(input.prompt),
         model: profile.model.modelId,
         modelParameters: {
-          temperature: profile.model.temperature,
+          ...(profile.model.temperature !== undefined ? { temperature: profile.model.temperature } : {}),
           thinkingLevel: profile.model.thinkingLevel,
         },
       };
