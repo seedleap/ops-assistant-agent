@@ -22,7 +22,8 @@ spec:
         app.kubernetes.io/name: ops-assistant-agent
         app.kubernetes.io/component: agent-server
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: ops-assistant-agent-runtime
+      automountServiceAccountToken: true
       terminationGracePeriodSeconds: 120
       securityContext:
         fsGroup: 1000
