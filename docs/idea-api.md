@@ -6,20 +6,22 @@
 
 - 测试环境 Base URL：`https://agent.sddev.org`。
 - Content-Type：`application/json`。
+- 测试环境当前无需鉴权，可以直接运行本文的 `curl` Case。
 - 生产环境鉴权：`Authorization: Bearer <JWT>`。
 - JWT 的 `sub` 必须和请求中的 `userId` 一致。
 - 平台固定为 `Loopit 竖屏 Feed`，请求中不要传 `platform`。
-- 通常需要 2–5 分钟完成，建议每 2 秒查询一次。
+- 通常需要 5–10 分钟完成，建议每 2 秒查询一次，并为整个轮询流程预留至少 10 分钟。
 - 仅提供提交和查询两个 Idea 路由。
 
 ## 1. 提交生成任务
 
 ```http
 POST /ideas/generate
-Authorization: Bearer <JWT>
 Content-Type: application/json
 Idempotency-Key: idea-doc-case-001
 ```
+
+生产环境还必须携带 `Authorization: Bearer <JWT>`；测试环境不要添加该 Header。
 
 `Idempotency-Key` 必填，长度为 8–128，只能包含字母、数字、`.`、`_`、`:`、`-`。相同用户使用同一个 Key 和相同请求时返回原任务；同一个 Key 对应不同请求时返回 `409`。
 
@@ -43,7 +45,6 @@ Idempotency-Key: idea-doc-case-001
 BASE_URL="https://agent.sddev.org"
 
 curl --fail-with-body --request POST "$BASE_URL/ideas/generate" \
-  --header "Authorization: Bearer $TOKEN" \
   --header "Content-Type: application/json" \
   --header "Idempotency-Key: idea-doc-case-001" \
   --data-binary @docs/examples/idea-generate-request.json
@@ -101,12 +102,12 @@ curl --fail-with-body --request POST "$BASE_URL/ideas/generate" \
 
 ```http
 GET /ideas/{workflowId}?userId=idea-user
-Authorization: Bearer <JWT>
 ```
+
+生产环境还必须携带 `Authorization: Bearer <JWT>`。
 
 ```bash
 curl --fail-with-body \
-  --header "Authorization: Bearer $TOKEN" \
   "$BASE_URL/ideas/$WORKFLOW_ID?userId=idea-user"
 ```
 
@@ -179,7 +180,7 @@ curl --fail-with-body \
         "imagePrompt": "竖屏花园游戏画面，展示可操作光路、花苞、杂草和即时反馈。",
         "image": {
           "status": "completed",
-          "url": "https://cdn-cf.loopit.me/public/ideas/idea-user/garden-demo/idea_xxxxxxxxx/light_path.png",
+          "url": "https://cdn-cf.loopit.me/public/game/garden-demo/idea_xxxxxxxxx/workspace/dist/ideas/light_path.png",
           "mimeType": "image/png",
           "model": "gpt-image-2",
           "storage": "s3"
@@ -196,7 +197,7 @@ curl --fail-with-body \
 
 实际 `ideas` 数量等于请求中的 `count`。审核失败的候选不会伪装成通过：`gatePassed=false`，并保留 `audit.fatalReasons`、`audit.evidence` 和 `audit.recommendedDowngrade`，最终仍由用户选择。
 
-生产环境成功图片的 URL 使用 `https://cdn-cf.loopit.me/public/ideas/...`。如果单张图片在内部重试后仍失败，该图片返回 `status=failed` 和 `error`，任务状态为 `completed_with_errors`。
+生产环境成功图片的 URL 结构为 `https://cdn-cf.loopit.me/public/game/{projectId}/{workflowId}/workspace/dist/ideas/{ideaId}.png`。测试环境使用相同路径结构，域名为 `https://cdn-cf-dev.loopit.me`。如果单张图片在内部重试后仍失败，该图片返回 `status=failed` 和 `error`，任务状态为 `completed_with_errors`；已生成的 Idea 文本和其他成功图片仍会正常返回。
 
 ## 完整轮询 Case
 
@@ -209,7 +210,6 @@ BASE_URL="https://agent.sddev.org"
 
 submit_response=$(curl --fail-with-body --silent --show-error \
   --request POST "$BASE_URL/ideas/generate" \
-  --header "Authorization: Bearer $TOKEN" \
   --header "Content-Type: application/json" \
   --header "Idempotency-Key: idea-doc-case-001" \
   --data-binary @docs/examples/idea-generate-request.json)
@@ -218,13 +218,12 @@ workflow_id=$(jq -r '.workflow.id' <<<"$submit_response")
 
 while true; do
   result=$(curl --fail-with-body --silent --show-error \
-    --header "Authorization: Bearer $TOKEN" \
     "$BASE_URL/ideas/$workflow_id?userId=idea-user")
   status=$(jq -r '.workflow.status' <<<"$result")
   case "$status" in
     queued|running) sleep 2 ;;
-    completed) jq '.workflow.ideas' <<<"$result"; break ;;
-    completed_with_errors|failed) jq '.workflow' <<<"$result"; exit 1 ;;
+    completed|completed_with_errors) jq '.workflow.ideas' <<<"$result"; break ;;
+    failed) jq '.workflow' <<<"$result"; exit 1 ;;
     *) echo "unknown workflow status: $status" >&2; exit 1 ;;
   esac
 done

@@ -28,6 +28,7 @@ function testConfig(dataDir: string): AppConfig {
     defaultOutreachSilentMinutes: 60,
     interactiveSessionTimeoutMinutes: 60,
     assistantDryRun: true,
+    azureOpenAi: { apiVersion: "v1" },
     ideaImage: {
       model: "gpt-image-2",
       quality: "low",

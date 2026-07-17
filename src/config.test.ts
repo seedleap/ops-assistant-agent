@@ -128,6 +128,20 @@ test("loadConfig uses Carmack public image buckets and CDN hosts", () => {
   assert.equal(production.ideaAssets.cdnBaseUrl, "https://cdn-cf.loopit.me");
 });
 
+test("loadConfig reuses the shared Azure image credential for Idea text agents", () => {
+  const config = loadConfig({
+    ASSISTANT_DRY_RUN: "true",
+    IDEA_IMAGE_API_KEY: "shared-azure-key",
+    IDEA_IMAGE_BASE_URL: "https://shared-resource.cognitiveservices.azure.com",
+  });
+
+  assert.deepEqual(config.azureOpenAi, {
+    apiKey: "shared-azure-key",
+    baseUrl: "https://shared-resource.cognitiveservices.azure.com",
+    apiVersion: "v1",
+  });
+});
+
 test("loadConfig rejects profiles outside the model whitelist", () => {
   assert.throws(
     () => loadConfig({ MODEL_WHITELIST: "google-vertex/gemini-3.1-flash-lite" }),

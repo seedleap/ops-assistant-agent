@@ -58,6 +58,10 @@ const environmentSchema = z.object({
   IDEA_THINKING_LEVEL: thinkingLevelSchema.default(IDEA_INVENTOR_PROFILE.model.thinkingLevel),
   IDEA_TIMEOUT_MS: positiveInteger(IDEA_INVENTOR_PROFILE.runtime.timeoutMs),
 
+  AZURE_OPENAI_API_KEY: optionalString,
+  AZURE_OPENAI_BASE_URL: optionalString.pipe(z.string().url().optional()),
+  AZURE_OPENAI_API_VERSION: optionalString,
+
   IDEA_IMAGE_BASE_URL: optionalString.pipe(z.string().url().optional()),
   IDEA_IMAGE_API_KEY: optionalString,
   IDEA_IMAGE_MODEL: optionalString,
@@ -155,6 +159,11 @@ export interface AppConfig {
   defaultOutreachSilentMinutes: number;
   interactiveSessionTimeoutMinutes: number;
   assistantDryRun: boolean;
+  azureOpenAi: {
+    apiKey?: string;
+    baseUrl?: string;
+    apiVersion: string;
+  };
   ideaImage: {
     baseUrl?: string;
     apiKey?: string;
@@ -330,6 +339,14 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     defaultOutreachSilentMinutes: env.DEFAULT_OUTREACH_SILENT_MINUTES,
     interactiveSessionTimeoutMinutes: env.INTERACTIVE_SESSION_TIMEOUT_MINUTES,
     assistantDryRun: env.ASSISTANT_DRY_RUN,
+    azureOpenAi: {
+      // Text and image deployments currently share one approved Azure resource.
+      // Prefer dedicated text credentials, but keep the existing image secret
+      // compatible with containers that have not added duplicate secret keys yet.
+      apiKey: env.AZURE_OPENAI_API_KEY || env.IDEA_IMAGE_API_KEY || env.AZURE_IMAGE_API_KEY,
+      baseUrl: env.AZURE_OPENAI_BASE_URL || env.IDEA_IMAGE_BASE_URL || env.AZURE_IMAGE_BASE_URL,
+      apiVersion: env.AZURE_OPENAI_API_VERSION || "v1",
+    },
     ideaImage: {
       baseUrl: env.IDEA_IMAGE_BASE_URL || env.AZURE_IMAGE_BASE_URL,
       apiKey: env.IDEA_IMAGE_API_KEY || env.AZURE_IMAGE_API_KEY,
