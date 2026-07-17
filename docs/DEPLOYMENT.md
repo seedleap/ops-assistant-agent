@@ -46,13 +46,16 @@ Persistent paths include:
 
 ## Secrets
 
-Never bake `.env`, Google credentials, MCP service tokens or Langfuse keys into
+Never bake `.env`, Azure OpenAI or Google credentials, MCP service tokens or Langfuse keys into
 the image. The required service secret should provide at least:
 
 ```text
 API_JWT_SECRET
 LANGFUSE_PUBLIC_KEY
 LANGFUSE_SECRET_KEY
+AZURE_OPENAI_API_KEY
+AZURE_OPENAI_BASE_URL
+AZURE_OPENAI_API_VERSION
 GOOGLE_CLOUD_PROJECT
 OPS_MCP_URL
 OPS_MCP_TOKEN

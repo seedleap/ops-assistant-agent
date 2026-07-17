@@ -56,6 +56,16 @@ export class OpsModelRegistry {
     const authPath = join(config.dataDir, "pi-auth", "auth.json");
     await mkdir(dirname(authPath), { recursive: true });
     const authStorage = AuthStorage.create(authPath);
+    if (config.azureOpenAi.apiKey) {
+      // Pi resolves credentials by provider name. Register the resolved runtime
+      // key explicitly so container deployments can reuse the shared Azure
+      // image credential without writing secrets into auth.json.
+      authStorage.setRuntimeApiKey("azure-openai-responses", config.azureOpenAi.apiKey);
+    }
+    if (config.azureOpenAi.baseUrl) {
+      process.env.AZURE_OPENAI_BASE_URL ||= config.azureOpenAi.baseUrl;
+    }
+    process.env.AZURE_OPENAI_API_VERSION ||= config.azureOpenAi.apiVersion;
     const registry = ModelRegistry.create(authStorage);
     return new OpsModelRegistry(config, authStorage, registry);
   }

@@ -16,6 +16,8 @@ import { MODEL_OPTIONS } from "../agent/models.js";
 import { listAgentProfiles, resolveAgentProfileById } from "../agent/profiles/registry.js";
 import { isAgentProfileId, type AgentProfileId } from "../agent/profiles/catalog.js";
 import type { OutreachScheduler } from "../infrastructure/scheduler/outreach-scheduler.js";
+import { IdeaWorkflowConflictError, type IdeaWorkflow } from "../ideas/workflow.js";
+import { createIdeaRouter, IdeaAuthorizationError } from "./idea-router.js";
 import { createId, DEFAULT_THREAD_ID, JsonStore } from "../infrastructure/persistence/json-store.js";
 import { createAuthentication } from "../http/security.js";
 import { KeyedMutex } from "../concurrency/keyedMutex.js";
@@ -38,6 +40,7 @@ export interface AppDependencies {
   assistant: OpsAssistant;
   scheduler: OutreachScheduler;
   logger: Logger;
+  ideaWorkflow?: IdeaWorkflow;
 }
 
 interface InteractiveSessionDecision {
@@ -86,7 +89,7 @@ async function prepareInteractiveSession(
  * 这里只负责 HTTP 协议层：解析请求、鉴权、返回响应。
  * 聊天运行、会话持久化和调度决策仍由下层对象完成，避免路由直接实现业务规则。
  */
-export function createApp({ config, store, assistant, scheduler, logger }: AppDependencies): express.Express {
+export function createApp({ config, store, assistant, scheduler, logger, ideaWorkflow }: AppDependencies): express.Express {
 const app = express();
 const conversationMutex = new KeyedMutex();
 const conversationArchive = new ConversationArchiveStore(config.conversationArchive ?? {
@@ -115,7 +118,7 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
   origin: config.corsOrigins,
   methods: ["GET", "POST", "PUT", "DELETE"],
-  allowedHeaders: ["Authorization", "Content-Type"],
+  allowedHeaders: ["Authorization", "Content-Type", "Idempotency-Key"],
 }));
 app.use(express.json({ limit: "1mb" }));
 if (config.staticUiEnabled) app.use(express.static(config.publicDir));
@@ -163,8 +166,10 @@ app.use(rateLimit({
 app.use(createAuthentication(config));
 
 app.get("/state", (_req, res) => {
-  res.json(store.snapshot());
+  const { ideaWorkflows: _privateIdeaWorkflows, ...state } = store.snapshot();
+  res.json(state);
 });
+app.use("/ideas", createIdeaRouter({ config, store, workflow: ideaWorkflow }));
 
 // 某个会话(userId+imThreadId)按时间顺序的消息——前端刷新后用来捞回没显示的 agent 回复
 app.get("/im/messages", (req, res) => {
@@ -626,6 +631,14 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   }
   if (typeof err === "object" && err && "name" in err && err.name === "UnauthorizedError") {
     res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  if (err instanceof IdeaWorkflowConflictError) {
+    res.status(409).json({ error: err.message });
+    return;
+  }
+  if (err instanceof IdeaAuthorizationError) {
+    res.status(403).json({ error: err.message });
     return;
   }
   _req.log.error({ err }, "unhandled request error");

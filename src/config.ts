@@ -2,10 +2,12 @@ import "dotenv/config";
 import { isAbsolute, resolve } from "node:path";
 import { z } from "zod";
 import { AGENT_PROFILES, type AgentProfileId } from "./agent/profiles/catalog.js";
+import { IDEA_IMAGE_CONFIG } from "./agent/profiles/idea-workflow.js";
 import type { AgentProfileOverrides } from "./agent/profiles/types.js";
 
 const CREATOR_CHAT_PROFILE = AGENT_PROFILES["creator-chat"];
 const CREATOR_OUTREACH_PROFILE = AGENT_PROFILES["creator-outreach"];
+const IDEA_INVENTOR_PROFILE = AGENT_PROFILES["idea-inventor"];
 
 const thinkingLevelSchema = z.enum(["off", "minimal", "low", "medium", "high"]);
 const optionalString = z.preprocess(
@@ -50,6 +52,28 @@ const environmentSchema = z.object({
   ASSISTANT_TEMPERATURE: z.coerce.number().min(0).max(2).default(CREATOR_CHAT_PROFILE.model.temperature),
   ASSISTANT_MAX_TURNS: positiveInteger(CREATOR_CHAT_PROFILE.runtime.maxTurns),
   ASSISTANT_TIMEOUT_MS: positiveInteger(CREATOR_CHAT_PROFILE.runtime.timeoutMs),
+
+  IDEA_MODEL_PROVIDER: optionalString,
+  IDEA_MODEL_ID: optionalString,
+  IDEA_THINKING_LEVEL: thinkingLevelSchema.default(IDEA_INVENTOR_PROFILE.model.thinkingLevel),
+  IDEA_TIMEOUT_MS: positiveInteger(IDEA_INVENTOR_PROFILE.runtime.timeoutMs),
+
+  AZURE_OPENAI_API_KEY: optionalString,
+  AZURE_OPENAI_BASE_URL: optionalString.pipe(z.string().url().optional()),
+  AZURE_OPENAI_API_VERSION: optionalString,
+
+  IDEA_IMAGE_BASE_URL: optionalString.pipe(z.string().url().optional()),
+  IDEA_IMAGE_API_KEY: optionalString,
+  IDEA_IMAGE_MODEL: optionalString,
+  IDEA_IMAGE_QUALITY: z.enum(["low", "medium", "high"]).default(IDEA_IMAGE_CONFIG.quality),
+  IDEA_IMAGE_TIMEOUT_MS: positiveInteger(90_000),
+  IDEA_ASSET_STORAGE: z.enum(["local", "s3"]).optional(),
+  IDEA_ASSET_BUCKET: optionalString,
+  IDEA_ASSET_PREFIX: z.string().trim().min(1).default("lab/ideas"),
+  IDEA_ASSET_CDN_BASE_URL: optionalString.pipe(z.string().url().optional()),
+  AZURE_IMAGE_BASE_URL: optionalString.pipe(z.string().url().optional()),
+  AZURE_IMAGE_API_KEY: optionalString,
+  AZURE_IMAGE_DEPLOYMENT: optionalString,
 
   OUTREACH_MODEL_PROVIDER: optionalString,
   OUTREACH_MODEL_ID: optionalString,
@@ -137,6 +161,27 @@ export interface AppConfig {
   defaultOutreachSilentMinutes: number;
   interactiveSessionTimeoutMinutes: number;
   assistantDryRun: boolean;
+  azureOpenAi: {
+    apiKey?: string;
+    baseUrl?: string;
+    apiVersion: string;
+  };
+  ideaImage: {
+    baseUrl?: string;
+    apiKey?: string;
+    model: string;
+    quality: "low" | "medium" | "high";
+    size: "1024x1536";
+    background: "opaque";
+    outputFormat: "png";
+    timeoutMs: number;
+  };
+  ideaAssets: {
+    storage: "local" | "s3";
+    bucket: string;
+    prefix: string;
+    cdnBaseUrl: string;
+  };
   modelWhitelist: string[];
   agentProfileOverrides: Partial<Record<AgentProfileId, AgentProfileOverrides>>;
   langfuse: LangfuseConfig;
@@ -208,7 +253,10 @@ function normalizeGoogleVertexEnv(provider: string): void {
     process.env.GCLOUD_PROJECT ||= project;
     process.env.GCLOUD_PROJECT_ID ||= project;
   }
-  const location = process.env.GOOGLE_CLOUD_LOCATION || process.env.GCLOUD_LOCATION;
+  // Pi's Vertex ADC resolver requires an explicit location even though Vertex
+  // itself accepts `global` for Gemini. Keep both common env names aligned.
+  const location = process.env.GOOGLE_CLOUD_LOCATION || process.env.GCLOUD_LOCATION ||
+    (provider === "google-vertex" ? "global" : undefined);
   if (location) {
     process.env.GOOGLE_CLOUD_LOCATION ||= location;
     process.env.GCLOUD_LOCATION ||= location;
@@ -247,14 +295,18 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   }
   const outreachProvider = env.OUTREACH_MODEL_PROVIDER || CREATOR_OUTREACH_PROFILE.model.provider;
   const outreachModelId = env.OUTREACH_MODEL_ID || CREATOR_OUTREACH_PROFILE.model.modelId;
+  const ideaProvider = env.IDEA_MODEL_PROVIDER || IDEA_INVENTOR_PROFILE.model.provider;
+  const ideaModelId = env.IDEA_MODEL_ID || IDEA_INVENTOR_PROFILE.model.modelId;
   const interactiveModel = `${env.ASSISTANT_MODEL_PROVIDER}/${env.ASSISTANT_MODEL_ID}`;
   const outreachModel = `${outreachProvider}/${outreachModelId}`;
+  const ideaModel = `${ideaProvider}/${ideaModelId}`;
   const modelWhitelist = parseModelWhitelist(env.MODEL_WHITELIST, [
     interactiveModel,
     outreachModel,
+    ideaModel,
     "google-vertex/gemini-3.1-flash-lite",
   ]);
-  const missingModels = [interactiveModel, outreachModel].filter((model) => !modelWhitelist.includes(model));
+  const missingModels = [interactiveModel, outreachModel, ideaModel].filter((model) => !modelWhitelist.includes(model));
   if (missingModels.length > 0) {
     throw new ConfigError(missingModels.map((model) => `MODEL_WHITELIST does not allow configured model ${model}`));
   }
@@ -262,6 +314,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   if (environment === process.env) {
     normalizeGoogleVertexEnv(env.ASSISTANT_MODEL_PROVIDER);
     if (outreachProvider !== env.ASSISTANT_MODEL_PROVIDER) normalizeGoogleVertexEnv(outreachProvider);
+    if (ideaProvider !== env.ASSISTANT_MODEL_PROVIDER) normalizeGoogleVertexEnv(ideaProvider);
   }
 
   return {
@@ -288,6 +341,32 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     defaultOutreachSilentMinutes: env.DEFAULT_OUTREACH_SILENT_MINUTES,
     interactiveSessionTimeoutMinutes: env.INTERACTIVE_SESSION_TIMEOUT_MINUTES,
     assistantDryRun: env.ASSISTANT_DRY_RUN,
+    azureOpenAi: {
+      // Text and image deployments currently share one approved Azure resource.
+      // Prefer dedicated text credentials, but keep the existing image secret
+      // compatible with containers that have not added duplicate secret keys yet.
+      apiKey: env.AZURE_OPENAI_API_KEY || env.IDEA_IMAGE_API_KEY || env.AZURE_IMAGE_API_KEY,
+      baseUrl: env.AZURE_OPENAI_BASE_URL || env.IDEA_IMAGE_BASE_URL || env.AZURE_IMAGE_BASE_URL,
+      apiVersion: env.AZURE_OPENAI_API_VERSION || "v1",
+    },
+    ideaImage: {
+      baseUrl: env.IDEA_IMAGE_BASE_URL || env.AZURE_IMAGE_BASE_URL,
+      apiKey: env.IDEA_IMAGE_API_KEY || env.AZURE_IMAGE_API_KEY,
+      model: env.IDEA_IMAGE_MODEL || env.AZURE_IMAGE_DEPLOYMENT || IDEA_IMAGE_CONFIG.modelId,
+      quality: env.IDEA_IMAGE_QUALITY,
+      size: IDEA_IMAGE_CONFIG.size,
+      background: IDEA_IMAGE_CONFIG.background,
+      outputFormat: IDEA_IMAGE_CONFIG.outputFormat,
+      timeoutMs: env.IDEA_IMAGE_TIMEOUT_MS,
+    },
+    ideaAssets: {
+      storage: env.IDEA_ASSET_STORAGE || (env.NODE_ENV === "test" ? "local" : "s3"),
+      // This internal service intentionally keeps Idea assets in the dev workspace plane,
+      // including deployments that run with NODE_ENV=production.
+      bucket: env.IDEA_ASSET_BUCKET || "leap-workspace-shared-dev",
+      prefix: env.IDEA_ASSET_PREFIX,
+      cdnBaseUrl: env.IDEA_ASSET_CDN_BASE_URL || "https://cdn-cf-dev.loopit.me",
+    },
     modelWhitelist,
     agentProfileOverrides: {
       "creator-chat": {
@@ -313,6 +392,14 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
           maxTurns: env.OUTREACH_MAX_TURNS,
           timeoutMs: env.OUTREACH_TIMEOUT_MS,
         },
+      },
+      "idea-inventor": {
+        model: { provider: ideaProvider, modelId: ideaModelId, thinkingLevel: env.IDEA_THINKING_LEVEL },
+        runtime: { timeoutMs: env.IDEA_TIMEOUT_MS },
+      },
+      "idea-converger": {
+        model: { provider: ideaProvider, modelId: ideaModelId, thinkingLevel: env.IDEA_THINKING_LEVEL },
+        runtime: { timeoutMs: env.IDEA_TIMEOUT_MS },
       },
     },
     langfuse: {

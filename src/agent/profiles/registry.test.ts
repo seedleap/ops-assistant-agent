@@ -5,8 +5,14 @@ import { AGENT_PROFILES, AGENT_PROFILE_IDS, isAgentProfileId } from "./catalog.j
 import { resolveAgentProfile, resolveAgentProfileById } from "./registry.js";
 
 test("catalog keys are the Profile ID source of truth", () => {
-  assert.deepEqual(AGENT_PROFILE_IDS, ["creator-chat", "creator-outreach"]);
+  assert.deepEqual(AGENT_PROFILE_IDS, [
+    "creator-chat",
+    "creator-outreach",
+    "idea-inventor",
+    "idea-converger",
+  ]);
   assert.equal(isAgentProfileId("creator-chat"), true);
+  assert.equal(isAgentProfileId("idea-inventor"), true);
   assert.equal(isAgentProfileId("unknown"), false);
 });
 
@@ -43,6 +49,17 @@ test("each Agent Profile owns its prompt, tools and runtime policy", () => {
   assert.equal(outreach.runtime.compactionEnabled, false);
   assert.ok(!outreach.toolNames.includes("query_work_prompt"));
   assert.deepEqual(outreach.localSkills, ["creator-guide", "ops-activities"]);
+
+  const inventor = resolveAgentProfileById(config, "idea-inventor");
+  assert.equal(inventor.prompt.version, "idea-workflow-v1");
+  assert.equal(inventor.prompt.file, "/tmp/ops-agent-prompts/idea.md");
+  assert.equal(inventor.prompt.section, "idea-inventor");
+  assert.equal(inventor.traceName, "idea");
+  assert.equal(inventor.model.provider, "azure-openai-responses");
+  assert.equal(inventor.model.modelId, "gpt-5.5");
+  assert.equal(inventor.model.temperature, undefined);
+  assert.deepEqual(inventor.toolNames, []);
+  assert.equal(inventor.runtime.maxTurns, 2);
 });
 
 test("run input selects the Profile and only chat accepts an allowed model override", () => {
@@ -68,6 +85,17 @@ test("run input selects the Profile and only chat accepts an allowed model overr
   const outreach = resolveAgentProfile(config, { ...base, type: "outreach" });
   assert.equal(outreach.id, "creator-outreach");
   assert.equal(outreach.model.modelId, AGENT_PROFILES["creator-outreach"].model.modelId);
+
+  const inventor = resolveAgentProfile(config, {
+    ...base,
+    type: "interactive",
+    profileId: "idea-inventor",
+  });
+  assert.equal(inventor.id, "idea-inventor");
+  assert.throws(
+    () => resolveAgentProfile(config, { ...base, type: "interactive", profileId: "unknown" }),
+    /Unknown Agent Profile/,
+  );
 });
 
 test("one Profile model override does not implicitly change another Profile", () => {
@@ -75,7 +103,7 @@ test("one Profile model override does not implicitly change another Profile", ()
     ASSISTANT_DRY_RUN: "true",
     ASSISTANT_MODEL_PROVIDER: "openai",
     ASSISTANT_MODEL_ID: "gpt-test",
-    MODEL_WHITELIST: "openai/gpt-test,google-vertex/gemini-3-flash-preview",
+    MODEL_WHITELIST: "openai/gpt-test,google-vertex/gemini-3-flash-preview,azure-openai-responses/gpt-5.5",
   });
 
   const chat = resolveAgentProfileById(config, "creator-chat");

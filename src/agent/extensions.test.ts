@@ -60,6 +60,33 @@ test("model parameters extension patches Vertex payload without enabling thought
   });
 });
 
+test("model parameters extension omits temperature for Azure Responses reasoning models", () => {
+  let handler: ((event: { payload: unknown }) => unknown) | undefined;
+  const pi = {
+    on(event: string, callback: (event: { payload: unknown }) => unknown) {
+      if (event === "before_provider_request") handler = callback;
+    },
+  } as unknown as ExtensionAPI;
+  const profile: AgentProfile = {
+    ...PROFILE,
+    model: {
+      provider: "azure-openai-responses",
+      modelId: "gpt-5.5",
+      thinkingLevel: "high",
+    },
+  };
+
+  createModelParametersExtension(profile)(pi);
+  const result = handler?.({
+    payload: {
+      model: profile.model.modelId,
+      reasoning: { effort: "high" },
+    },
+  });
+
+  assert.equal(result, undefined);
+});
+
 test("latest Pi resource loader keeps explicit inline extensions when discovery is disabled", async () => {
   const dir = await mkdtemp(join(tmpdir(), "ops-pi-loader-"));
   try {

@@ -28,6 +28,21 @@ function testConfig(dataDir: string): AppConfig {
     defaultOutreachSilentMinutes: 60,
     interactiveSessionTimeoutMinutes: 60,
     assistantDryRun: true,
+    azureOpenAi: { apiVersion: "v1" },
+    ideaImage: {
+      model: "gpt-image-2",
+      quality: "low",
+      size: "1024x1536",
+      background: "opaque",
+      outputFormat: "png",
+      timeoutMs: 90_000,
+    },
+    ideaAssets: {
+      storage: "local",
+      bucket: "leap-workspace-shared-dev",
+      prefix: "lab/ideas",
+      cdnBaseUrl: "https://cdn-cf-dev.loopit.me",
+    },
     modelWhitelist: ["google-vertex/gemini-3-flash-preview"],
     agentProfileOverrides: {},
     langfuse: {

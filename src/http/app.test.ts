@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -11,9 +11,22 @@ import { loadConfig } from "../config.js";
 import { OutreachScheduler } from "../infrastructure/scheduler/outreach-scheduler.js";
 import { createApp } from "./app.js";
 import { JsonStore } from "../infrastructure/persistence/json-store.js";
+import { AzureIdeaImageGenerator } from "../integrations/images/idea-image.js";
+import { IdeaWorkflow } from "../ideas/workflow.js";
+import { LocalIdeaAssetStore } from "../integrations/images/idea-asset-store.js";
 
 const jwtSecret = "test-secret-that-is-at-least-32-characters";
 const logger = pino({ enabled: false });
+
+async function waitFor<T>(read: () => T | undefined, timeoutMs = 2_000): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = read();
+    if (value) return value;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("timed out waiting for test state");
+}
 
 test("health is public while API routes require a valid JWT", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "ops-http-"));
@@ -35,7 +48,14 @@ test("health is public while API routes require a valid JWT", async () => {
     const store = await JsonStore.open(config.dataDir);
     const assistant = new OpsAssistant(config);
     const scheduler = new OutreachScheduler(config, store, assistant, logger);
-    const app = createApp({ config, store, assistant, scheduler, logger });
+    const ideaWorkflow = new IdeaWorkflow(
+      config,
+      store,
+      assistant,
+      new AzureIdeaImageGenerator(config),
+      new LocalIdeaAssetStore(config),
+    );
+    const app = createApp({ config, store, assistant, scheduler, logger, ideaWorkflow });
 
     await request(app).get("/health").expect(200, { ok: true });
     await request(app).get("/").expect(401, { error: "unauthorized" });
@@ -45,15 +65,17 @@ test("health is public while API routes require a valid JWT", async () => {
       .options("/state")
       .set("Origin", "https://ops.loopit.example")
       .set("Access-Control-Request-Method", "GET")
-      .set("Access-Control-Request-Headers", "Authorization,Content-Type")
+      .set("Access-Control-Request-Headers", "Authorization,Content-Type,Idempotency-Key")
       .expect(204);
     assert.equal(preflight.headers["access-control-allow-origin"], "https://ops.loopit.example");
     assert.match(preflight.headers["access-control-allow-headers"], /Authorization/);
+    assert.match(preflight.headers["access-control-allow-headers"], /Idempotency-Key/);
 
     const token = await new SignJWT({ scope: "ops-agent" })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
       .setExpirationTime("5m")
+      .setSubject("idea-user")
       .sign(new TextEncoder().encode(jwtSecret));
     const response = await request(app)
       .get("/state")
@@ -61,6 +83,7 @@ test("health is public while API routes require a valid JWT", async () => {
       .expect(200);
 
     assert.deepEqual(response.body.conversations, []);
+    assert.equal(response.body.ideaWorkflows, undefined);
 
     const profiles = await request(app)
       .get("/config/agent-profiles")
@@ -69,6 +92,8 @@ test("health is public while API routes require a valid JWT", async () => {
     assert.deepEqual(profiles.body.profiles.map((profile: { id: string }) => profile.id), [
       "creator-chat",
       "creator-outreach",
+      "idea-inventor",
+      "idea-converger",
     ]);
     assert.equal(profiles.body.profiles[0].promptVersion, "creator-growth-v2");
     assert.equal(profiles.body.profiles[1].promptVersion, "creator-outreach-v2");
@@ -82,6 +107,12 @@ test("health is public while API routes require a valid JWT", async () => {
       "query_work_comments",
       "query_work_prompt",
     ]);
+    assert.deepEqual(profiles.body.profiles.slice(2).map((profile: { toolNames: string[] }) => profile.toolNames), [[], []]);
+
+    const documentedIdeaRequest = JSON.parse(await readFile(
+      join(process.cwd(), "docs/examples/idea-generate-request.json"),
+      "utf8",
+    )) as Record<string, unknown>;
 
     await request(app)
       .get("/config/agent-profiles/creator-outreach/system-prompt")
@@ -111,6 +142,100 @@ test("health is public while API routes require a valid JWT", async () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ userId: "u".repeat(129), text: "hello" })
       .expect(400);
+
+    const generated = await request(app)
+      .post("/ideas/generate")
+      .set("Authorization", `Bearer ${token}`)
+      .set("Idempotency-Key", "idea-doc-case-001")
+      .send(documentedIdeaRequest)
+      .expect(202);
+    assert.equal(generated.body.workflow.status, "queued");
+    const completed = await waitFor(() => {
+      const value = store.getIdeaWorkflow(generated.body.workflow.id);
+      return value?.status === "completed" ? value : undefined;
+    });
+    assert.equal(completed.ideas.length, 2);
+    assert.equal(completed.input.platform, "Loopit 竖屏 Feed");
+    assert.equal(completed.ideas[0].image.status, "completed");
+    assert.match(completed.ideas[0].image.url || "", /^\/ideas\/assets\/.+\.png$/);
+    assert.ok(completed.ideas[0].playerGoal);
+    assert.ok(completed.ideas[0].difficultyCurve);
+    assert.ok(completed.ideas[0].first10Seconds);
+    assert.equal(typeof completed.ideas[0].audit.loopPass, "boolean");
+    assert.ok(completed.ideas[0].audit.evidence);
+    assert.ok(completed.ideas[0].audit.recommendedDowngrade);
+
+    const replay = await request(app)
+      .post("/ideas/generate")
+      .set("Authorization", `Bearer ${token}`)
+      .set("Idempotency-Key", "idea-doc-case-001")
+      .send(documentedIdeaRequest)
+      .expect(200);
+    assert.equal(replay.body.idempotentReplay, true);
+    assert.equal(replay.body.workflow.id, generated.body.workflow.id);
+    assert.equal(store.snapshot().ideaWorkflows.length, 1);
+
+    await request(app)
+      .post("/ideas/generate")
+      .set("Authorization", `Bearer ${token}`)
+      .set("Idempotency-Key", "idea-doc-case-001")
+      .send({
+        userId: "idea-user", theme: "不同主题", audience: "休闲游戏用户",
+        emotion: "快速判断", duration: "30 秒", count: 2,
+      })
+      .expect(409);
+
+    await request(app)
+      .post("/ideas/generate")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        userId: "idea-user", theme: "无幂等键", audience: "休闲游戏用户", emotion: "快速判断",
+      })
+      .expect(400);
+    await request(app)
+      .post("/ideas/generate")
+      .set("Authorization", `Bearer ${token}`)
+      .set("Idempotency-Key", "bad key")
+      .send(documentedIdeaRequest)
+      .expect(400, {
+        error: "Idempotency-Key must be 8-128 characters using letters, numbers, dot, underscore, colon or hyphen",
+      });
+
+    const publicWorkflow = await request(app)
+      .get(`/ideas/${generated.body.workflow.id}?userId=idea-user`)
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200);
+    assert.equal(publicWorkflow.body.workflow.checkpoints, undefined);
+    assert.equal(publicWorkflow.body.workflow.idempotencyKey, undefined);
+    assert.equal(publicWorkflow.body.workflow.inputHash, undefined);
+    assert.equal(publicWorkflow.body.workflow.metadata, undefined);
+
+    await request(app)
+      .post("/ideas/generate")
+      .set("Authorization", `Bearer ${token}`)
+      .set("Idempotency-Key", "idea-submit-002")
+      .send({
+        userId: "idea-user",
+        theme: "会移动的花园",
+        audience: "休闲游戏用户",
+        emotion: "快速判断",
+        platform: "自定义平台",
+      })
+      .expect(400);
+    await request(app)
+      .get(completed.ideas[0].image.url!)
+      .set("Authorization", `Bearer ${token}`)
+      .expect(404);
+    await request(app)
+      .post(`/ideas/${generated.body.workflow.id}/retry`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ userId: "idea-user" })
+      .expect(404);
+    await request(app)
+      .post(`/ideas/${generated.body.workflow.id}/cancel`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ userId: "idea-user" })
+      .expect(404);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }

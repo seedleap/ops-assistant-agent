@@ -80,6 +80,84 @@ export interface OutboxMessage {
   deliveredAt?: ISODateString;
 }
 
+export interface IdeaImageResult {
+  status: "pending" | "completed" | "failed";
+  url?: string;
+  mimeType?: string;
+  model?: string;
+  storage?: "local" | "s3";
+  error?: string;
+}
+
+export interface GeneratedIdea {
+  id: string;
+  title: string;
+  summary: string;
+  mechanic: string;
+  interactionPattern: "tap-choice" | "timing" | "drag-track" | "swipe-path" | "hold-release" |
+    "sequence" | "resource-allocation" | "spatial-arrangement" | "other";
+  playerGoal: string;
+  playerAction: string;
+  gameState: string;
+  decision: string;
+  rules: string;
+  loop: string;
+  failState: string;
+  feedback: string;
+  failureRecovery: string;
+  whyFun: string;
+  prototypeTest: string;
+  difficultyCurve: string;
+  variationSource: string;
+  first10Seconds: string;
+  funRisks: string;
+  bindingRationale: string;
+  gatePassed: boolean;
+  fatalReasons: string[];
+  audit: {
+    loopPass: boolean;
+    predictionPass: boolean;
+    interactionPass: boolean;
+    feasibilityPass: boolean;
+    fatalReasons: string[];
+    evidence: string;
+    recommendedDowngrade: string;
+  };
+  imagePrompt: string;
+  image: IdeaImageResult;
+}
+
+export interface IdeaWorkflowRecord {
+  id: string;
+  idempotencyKey: string;
+  inputHash: string;
+  userId: string;
+  projectId?: string;
+  status: "queued" | "running" | "completed" | "completed_with_errors" | "failed" | "canceled";
+  /** `audit` is retained only so persisted Workflow V2 records remain readable. */
+  stage: "queued" | "invent" | "audit" | "converge" | "images" | "complete";
+  input: Record<string, unknown>;
+  ideas: GeneratedIdea[];
+  checkpoints: {
+    invention?: unknown;
+    /** Legacy Workflow V2 checkpoint; Workflow V1 does not write it. */
+    audits?: unknown;
+    convergence?: unknown;
+  };
+  attempt: number;
+  cancelRequested?: boolean;
+  metadata: {
+    workflowVersion: string;
+    promptVersion: string;
+    modelIds: string[];
+  };
+  error?: string;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  startedAt?: ISODateString;
+  completedAt?: ISODateString;
+}
+
 export interface StoreState {
   conversations: ConversationRecord[];
   sessions: ConversationSessionRecord[];
@@ -87,10 +165,13 @@ export interface StoreState {
   schedules: ScheduleRecord[];
   runs: AssistantRunRecord[];
   outbox: OutboxMessage[];
+  ideaWorkflows: IdeaWorkflowRecord[];
 }
 
 export interface AssistantRunInput {
   type: "interactive" | "outreach";
+  /** Internal workflow stages may select a dedicated Profile without exposing it on IM routes. */
+  profileId?: string;
   userId: string;
   imThreadId: string;
   runId: string;
@@ -101,6 +182,17 @@ export interface AssistantRunInput {
   sessionId?: string;
   sessionMode?: SessionMode;
   contextBootstrap?: string;
+  traceContext?: {
+    workflowId: string;
+    stage: string;
+    attempt: number;
+    parentSpanContext?: {
+      traceId: string;
+      spanId: string;
+      traceFlags: number;
+      isRemote?: boolean;
+    };
+  };
   creatorUid?: string;
   model?: string;
 }

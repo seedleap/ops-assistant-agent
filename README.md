@@ -4,7 +4,7 @@
 
 ## 当前能力
 
-- Gemini / Vertex 模型调用，支持 Profile 级模型、参数、提示词和工具白名单。
+- Gemini / Vertex 与 Azure OpenAI Responses 模型调用，支持 Profile 级模型、参数、提示词和工具白名单。
 - `/im/messages` 一次性返回 JSON。
 - `/im/stream` 以 SSE 流式返回文本、工具调用、用量和最终结果。
 - 对话按 `userId + imThreadId` 持久化，可继续已有 Session。
@@ -24,7 +24,7 @@ pnpm install
 pnpm dev
 ```
 
-本地直接使用项目根目录的 `.env`；测试和生产分别使用 `.env.test`、`.env.production`，这些文件中的 Langfuse 配置已与 Carmack 对齐。
+配置方式与 Carmack 一致：`.env` 是公共基线，测试使用 `.env + .env.test`，生产使用 `.env + .env.production`，后加载的环境文件覆盖同名配置。测试或容器启动时需要同时传入基础文件和对应环境覆盖文件。
 
 打开 <http://localhost:8010/> 可使用本地调试页面。
 
@@ -34,7 +34,7 @@ pnpm dev
 ASSISTANT_DRY_RUN=true pnpm dev:once
 ```
 
-真实调用 Gemini 需要配置 `GOOGLE_APPLICATION_CREDENTIALS` 和 `GOOGLE_CLOUD_PROJECT`。生产环境还需要配置 JWT、MCP 和必要的 Langfuse 参数。
+Creator Chat 和 Outreach 真实调用 Gemini 时需要配置 `GOOGLE_APPLICATION_CREDENTIALS` 与 `GOOGLE_CLOUD_PROJECT`；Idea Inventor 和 Converger 默认使用 `azure-openai-responses/gpt-5.5`，需要配置 `AZURE_OPENAI_API_KEY`、`AZURE_OPENAI_BASE_URL` 和 `AZURE_OPENAI_API_VERSION=v1`。生产环境还需要配置 JWT、MCP 和必要的 Langfuse 参数。
 
 ## 常用接口
 
@@ -65,6 +65,44 @@ curl -X POST http://localhost:8010/im/messages \
 ## Profile 与 Skill
 
 Profile 定义在 [`src/agent/profiles/`](src/agent/profiles/)；对应系统提示词在 [`config/agent-profiles/`](config/agent-profiles/)。
+
+## Idea 发散 Workflow
+
+外部调用请直接参考 [`docs/idea-api.md`](docs/idea-api.md)，其中包含经过集成测试的提交与轮询 Case。
+
+`POST /ideas/generate` 默认使用 Idea Workflow V1：两个互相隔离的 Pi Agent Profile 依次执行玩法内核发散和红队收敛；最终由服务端为每个入选 Idea 生成一张竖屏概念图。一次请求最多返回 8 个方向。接口要求携带 8–128 字符的 `Idempotency-Key`，创建成功后立即返回 `202`，客户端通过查询接口读取进度。
+
+```http
+POST /ideas/generate
+Idempotency-Key: u-1-project-1-submit-001
+```
+
+```json
+{
+  "userId": "u-1",
+  "projectId": "project-1",
+  "theme": "会移动的花园",
+  "audience": "休闲游戏用户",
+  "emotion": "轻松但需要快速判断",
+  "duration": "30 秒",
+  "notes": "优先单手操作",
+  "count": 4
+}
+```
+
+平台不作为 API 入参，workflow 内固定为 `Loopit 竖屏 Feed`。
+
+相同用户、相同幂等键和相同入参会返回原任务；相同幂等键换入参返回 `409`。每个 Agent 阶段都保存 checkpoint，进程启动时会恢复 `queued/running` 任务。响应中的每个 `idea` 同时包含玩法文本字段和 `image.url`。
+
+- `GET /ideas/:id?userId=<userId>`：查询状态和结果。Idea 对外只提供提交和查询两个路由。
+
+JWT 模式下，token 的 `sub` 必须与 `userId` 一致。
+
+图片服务凭据读取 `IDEA_IMAGE_BASE_URL` 和 `IDEA_IMAGE_API_KEY`，模型与输出参数统一定义在 `src/agent/profiles/idea-workflow.ts` 的 `IDEA_IMAGE_CONFIG` 中。部署时仍可通过 `IDEA_IMAGE_MODEL`、`IDEA_IMAGE_QUALITY` 临时覆盖，并兼容现有的 `AZURE_IMAGE_BASE_URL`、`AZURE_IMAGE_API_KEY`、`AZURE_IMAGE_DEPLOYMENT`。未配置图片服务时文本结果仍会保存，workflow 状态为 `completed_with_errors`。
+
+development 和 production 默认都使用 workspace S3 的专用 `lab/ideas` 命名空间，不再写入正式游戏发布使用的 `public/game`。因为这是内部服务，即使 `NODE_ENV=production`，也固定写入 `leap-workspace-shared-dev/lab/ideas/{workflowId}/{ideaId}.png`，并返回 `https://cdn-cf-dev.loopit.me/lab/ideas/...`。只有自动化 test 环境默认使用 `DATA_DIR/idea-images/` 本地存储。对象使用不可变缓存头，按 workflow 隔离目录，并把 user/project 写入 S3 Metadata。特殊部署需要覆盖基础设施时使用 `IDEA_ASSET_BUCKET`、`IDEA_ASSET_PREFIX` 和 `IDEA_ASSET_CDN_BASE_URL`。
+
+启用现有 `LANGFUSE_ENABLED=true` 后，每次任务只产生一个名为 `idea` 的 trace。发散、红队收敛和图片生成是其阶段 span；每个 Pi Agent 的 turn、token 与 cost 继续作为对应阶段的子 observation，因此会自动汇总到同一个 trace。根 trace 记录 checkpoint attempt、图片失败数和最终状态，不记录图片 base64 或凭证。
 
 每个 Profile 独立声明：
 

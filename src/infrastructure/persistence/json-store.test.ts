@@ -3,7 +3,27 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import type { IdeaWorkflowRecord } from "../../domain/types.js";
 import { JsonStore } from "./json-store.js";
+
+function queuedIdeaRecord(id: string, idempotencyKey: string): IdeaWorkflowRecord {
+  const now = new Date().toISOString();
+  return {
+    id,
+    idempotencyKey,
+    inputHash: id,
+    userId: "u1",
+    status: "queued",
+    stage: "queued",
+    input: {},
+    ideas: [],
+    checkpoints: {},
+    attempt: 0,
+    metadata: { workflowVersion: "test", promptVersion: "test", modelIds: [] },
+    createdAt: now,
+    updatedAt: now,
+  };
+}
 
 test("JsonStore serializes concurrent writes", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "ops-store-"));
@@ -16,6 +36,57 @@ test("JsonStore serializes concurrent writes", async () => {
 
     const reopened = await JsonStore.open(dataDir);
     assert.equal(reopened.snapshot().messages.length, 20);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("Idea workflow admission is atomic per user", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "ops-idea-admission-"));
+  try {
+    const store = await JsonStore.open(dataDir);
+    const results = await Promise.all([
+      store.createIdeaWorkflowIfAbsent(queuedIdeaRecord("idea-1", "submit-001")),
+      store.createIdeaWorkflowIfAbsent(queuedIdeaRecord("idea-2", "submit-002")),
+      store.createIdeaWorkflowIfAbsent(queuedIdeaRecord("idea-3", "submit-003")),
+    ]);
+    assert.equal(results.filter((result) => result.created).length, 2);
+    assert.equal(results.filter((result) => result.capacityExceeded).length, 1);
+    assert.equal(store.snapshot().ideaWorkflows.length, 2);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("Idea workflow reads are immutable and image updates are atomic", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "ops-idea-images-"));
+  try {
+    const store = await JsonStore.open(dataDir);
+    const record = queuedIdeaRecord("idea-images", "submit-images");
+    record.ideas = ["a", "b"].map((id) => ({
+      id, title: id, summary: id, mechanic: id, interactionPattern: "tap-choice" as const,
+      playerGoal: id, playerAction: id, gameState: id, decision: id, rules: id, loop: id,
+      failState: id, feedback: id, failureRecovery: id, whyFun: id, prototypeTest: id,
+      difficultyCurve: id, variationSource: id, first10Seconds: id, funRisks: id, bindingRationale: id,
+      gatePassed: true, fatalReasons: [],
+      audit: {
+        loopPass: true, predictionPass: true, interactionPass: true, feasibilityPass: true,
+        fatalReasons: [], evidence: id, recommendedDowngrade: "none",
+      },
+      imagePrompt: id, image: { status: "pending" as const },
+    }));
+    await store.createIdeaWorkflow(record);
+
+    const read = store.getIdeaWorkflow(record.id)!;
+    read.ideas[0].title = "mutated outside store";
+    assert.equal(store.getIdeaWorkflow(record.id)!.ideas[0].title, "a");
+
+    await Promise.all([
+      store.updateIdeaImage(record.id, "a", { status: "completed", url: "/a.png" }),
+      store.updateIdeaImage(record.id, "b", { status: "completed", url: "/b.png" }),
+    ]);
+    const updated = store.getIdeaWorkflow(record.id)!;
+    assert.deepEqual(updated.ideas.map((idea) => idea.image.url), ["/a.png", "/b.png"]);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }

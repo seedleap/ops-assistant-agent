@@ -2,15 +2,18 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
+import { selectSystemPrompt } from "../prompt.js";
 import { AGENT_PROFILES } from "./catalog.js";
 
-async function readProfilePrompt(fileName: string): Promise<string> {
-  return readFile(join(process.cwd(), "config", "agent-profiles", fileName), "utf8");
+async function readProfilePrompt(fileName: string, section?: string): Promise<string> {
+  const source = await readFile(join(process.cwd(), "config", "agent-profiles", fileName), "utf8");
+  return selectSystemPrompt(source, section);
 }
 
 test("every Agent Profile points to a non-empty scenario prompt", async () => {
   for (const [id, profile] of Object.entries(AGENT_PROFILES)) {
-    const prompt = await readProfilePrompt(profile.prompt.fileName);
+    const section = "section" in profile.prompt ? profile.prompt.section : undefined;
+    const prompt = await readProfilePrompt(profile.prompt.fileName, section);
     assert.ok(prompt.trim().length > 500, `${id} prompt is unexpectedly short`);
     assert.match(prompt, /Instruction boundary/);
     assert.match(prompt, /未满 13 岁/);
@@ -48,4 +51,16 @@ test("creator outreach prompt preserves value gate and no-send contract", async 
   assert.match(prompt, /运营人群标签只代表候选范围，不等于活动资格/);
   assert.match(prompt, /必须同时具备活动中台确认的当前资格、有效活动状态和官方行动入口/);
   assert.match(prompt, /结构化活动卡片中的活动 ID、任务、奖励、进度、按钮和跳转地址/);
+});
+
+test("V1 idea workflow prompts preserve divergence and red-team convergence", async () => {
+  const inventor = await readProfilePrompt("idea.md", "idea-inventor");
+  const converger = await readProfilePrompt("idea.md", "idea-converger");
+
+  assert.match(inventor, /扩大玩法内核/);
+  assert.match(inventor, /每 2 到 5 秒/);
+  assert.match(inventor, /去掉叙事、IP 或精美美术后就不成立/);
+  assert.match(converger, /红队评审/);
+  assert.match(converger, /不是独立 Agent 审计/);
+  assert.match(converger, /imagePrompt/);
 });

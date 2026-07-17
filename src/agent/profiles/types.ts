@@ -10,7 +10,7 @@ export interface AgentModelConfig {
   provider: string;
   modelId: string;
   thinkingLevel: AgentThinkingLevel;
-  temperature: number;
+  temperature?: number;
 }
 
 export interface AgentRuntimeConfig {
@@ -23,6 +23,8 @@ export interface AgentRuntimeConfig {
 export interface AgentPromptConfig {
   version: string;
   fileName: string;
+  /** 允许多个同一业务的 Agent 在一个文件中维护，并在运行时保持角色隔离。 */
+  section?: string;
 }
 
 /** Optional deploy-time changes layered over a Profile's versioned defaults. */
