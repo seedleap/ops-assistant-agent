@@ -57,8 +57,10 @@ export function createIdeaRouter(input: {
       const request = workflowSchema.parse(req.body);
       assertUser(req, request.userId);
       const idempotencyKey = req.get("Idempotency-Key") || "";
-      if (!idempotencyKey) {
-        res.status(400).json({ error: "Idempotency-Key header is required" });
+      if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) {
+        res.status(400).json({
+          error: "Idempotency-Key must be 8-128 characters using letters, numbers, dot, underscore, colon or hyphen",
+        });
         return;
       }
       const result = await workflow.start(request, idempotencyKey);

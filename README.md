@@ -68,6 +68,8 @@ Profile 定义在 [`src/agent/profiles/`](src/agent/profiles/)；对应系统提
 
 ## Idea 发散 Workflow
 
+外部调用请直接参考 [`docs/idea-api.md`](docs/idea-api.md)，其中包含经过集成测试的提交与轮询 Case。
+
 `POST /ideas/generate` 使用三个互相隔离的 Pi Agent Profile，依次执行玩法发明、独立审计和规格化收敛；最终由服务端为每个入选 Idea 生成一张竖屏概念图。一次请求最多返回 8 个方向。接口要求携带 8–128 字符的 `Idempotency-Key`，创建成功后立即返回 `202`，客户端通过查询接口读取进度。
 
 ```http

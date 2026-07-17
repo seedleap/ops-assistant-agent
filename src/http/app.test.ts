@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -110,6 +110,11 @@ test("health is public while API routes require a valid JWT", async () => {
     ]);
     assert.deepEqual(profiles.body.profiles.slice(2).map((profile: { toolNames: string[] }) => profile.toolNames), [[], [], []]);
 
+    const documentedIdeaRequest = JSON.parse(await readFile(
+      join(process.cwd(), "docs/examples/idea-generate-request.json"),
+      "utf8",
+    )) as Record<string, unknown>;
+
     await request(app)
       .get("/config/agent-profiles/creator-outreach/system-prompt")
       .set("Authorization", `Bearer ${token}`)
@@ -142,16 +147,8 @@ test("health is public while API routes require a valid JWT", async () => {
     const generated = await request(app)
       .post("/ideas/generate")
       .set("Authorization", `Bearer ${token}`)
-      .set("Idempotency-Key", "idea-submit-001")
-      .send({
-        userId: "idea-user",
-        projectId: "project-1",
-        theme: "会移动的花园",
-        audience: "休闲游戏用户",
-        emotion: "轻松但需要快速判断",
-        duration: "30 秒",
-        count: 2,
-      })
+      .set("Idempotency-Key", "idea-doc-case-001")
+      .send(documentedIdeaRequest)
       .expect(202);
     assert.equal(generated.body.workflow.status, "queued");
     const completed = await waitFor(() => {
@@ -162,15 +159,18 @@ test("health is public while API routes require a valid JWT", async () => {
     assert.equal(completed.input.platform, "Loopit 竖屏 Feed");
     assert.equal(completed.ideas[0].image.status, "completed");
     assert.match(completed.ideas[0].image.url || "", /^\/ideas\/assets\/.+\.png$/);
+    assert.ok(completed.ideas[0].playerGoal);
+    assert.ok(completed.ideas[0].difficultyCurve);
+    assert.ok(completed.ideas[0].first10Seconds);
+    assert.equal(typeof completed.ideas[0].audit.loopPass, "boolean");
+    assert.ok(completed.ideas[0].audit.evidence);
+    assert.ok(completed.ideas[0].audit.recommendedDowngrade);
 
     const replay = await request(app)
       .post("/ideas/generate")
       .set("Authorization", `Bearer ${token}`)
-      .set("Idempotency-Key", "idea-submit-001")
-      .send({
-        userId: "idea-user", projectId: "project-1", theme: "会移动的花园",
-        audience: "休闲游戏用户", emotion: "轻松但需要快速判断", duration: "30 秒", count: 2,
-      })
+      .set("Idempotency-Key", "idea-doc-case-001")
+      .send(documentedIdeaRequest)
       .expect(200);
     assert.equal(replay.body.idempotentReplay, true);
     assert.equal(replay.body.workflow.id, generated.body.workflow.id);
@@ -179,7 +179,7 @@ test("health is public while API routes require a valid JWT", async () => {
     await request(app)
       .post("/ideas/generate")
       .set("Authorization", `Bearer ${token}`)
-      .set("Idempotency-Key", "idea-submit-001")
+      .set("Idempotency-Key", "idea-doc-case-001")
       .send({
         userId: "idea-user", theme: "不同主题", audience: "休闲游戏用户",
         emotion: "快速判断", duration: "30 秒", count: 2,
@@ -193,6 +193,14 @@ test("health is public while API routes require a valid JWT", async () => {
         userId: "idea-user", theme: "无幂等键", audience: "休闲游戏用户", emotion: "快速判断",
       })
       .expect(400);
+    await request(app)
+      .post("/ideas/generate")
+      .set("Authorization", `Bearer ${token}`)
+      .set("Idempotency-Key", "bad key")
+      .send(documentedIdeaRequest)
+      .expect(400, {
+        error: "Idempotency-Key must be 8-128 characters using letters, numbers, dot, underscore, colon or hyphen",
+      });
 
     const publicWorkflow = await request(app)
       .get(`/ideas/${generated.body.workflow.id}?userId=idea-user`)
