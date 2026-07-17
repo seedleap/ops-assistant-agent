@@ -58,13 +58,12 @@ export class S3IdeaAssetStore implements IdeaAssetStore {
   });
 
   constructor(private readonly config: AppConfig) {
-    if (!config.ideaAssets.bucket) throw new Error("IDEA_ASSET_S3_BUCKET is required for S3 idea assets");
   }
 
   async put(input: Parameters<IdeaAssetStore["put"]>[0]): Promise<StoredIdeaAsset> {
     const key = ideaAssetKey(this.config.ideaAssets, input);
     await this.client.send(new PutObjectCommand({
-      Bucket: this.config.ideaAssets.bucket!,
+      Bucket: this.config.ideaAssets.bucket,
       Key: key,
       Body: input.bytes,
       ContentType: input.mimeType,
@@ -74,11 +73,9 @@ export class S3IdeaAssetStore implements IdeaAssetStore {
         idea: safeSegment(input.ideaId, "idea"),
       },
     }));
-    const cdn = this.config.ideaAssets.cdnBaseUrl?.replace(/\/$/, "");
+    const cdn = this.config.ideaAssets.cdnBaseUrl.replace(/\/$/, "");
     const encodedKey = key.split("/").map(encodeURIComponent).join("/");
-    const url = cdn
-      ? `${cdn}/${key.split("/").map(encodeURIComponent).join("/")}`
-      : `https://${this.config.ideaAssets.bucket}.s3.${this.region}.amazonaws.com/${encodedKey}`;
+    const url = `${cdn}/${encodedKey}`;
     return { url, storage: "s3" };
   }
 }

@@ -25,7 +25,7 @@ export class IdeaImagePipeline {
       while (cursor < ideas.length) {
         const { idea, index } = ideas[cursor++];
         throwIfCanceled();
-        const prompt = `Create a polished 9:16 vertical mobile game screenshot, not a poster. Show one active gameplay moment and communicate the mechanic visually. Interaction pattern: ${idea.interactionPattern}. Mechanic: ${idea.mechanic}. Player action: ${idea.playerAction}. Decision: ${idea.decision}. Short loop: ${idea.loop}. Visual direction: ${idea.imagePrompt}. Clearly distinguish actionable targets, predictive signals, current state, and immediate gameplay feedback. Do not show a failure, reset, retry, game-over, or results screen. Do not add weapons, characters, written text, generic buttons, or unrelated objects unless explicitly required by the core gameplay.`;
+        const prompt = `Create a polished 9:16 vertical mobile game screenshot, not a poster. Show one active gameplay moment and communicate the mechanic visually. Player goal: ${idea.playerGoal}. Interaction pattern: ${idea.interactionPattern}. Mechanic: ${idea.mechanic}. Player action: ${idea.playerAction}. Game state: ${idea.gameState}. Decision: ${idea.decision}. Rules: ${idea.rules}. Feedback: ${idea.feedback}. Visual direction: ${idea.imagePrompt}. Clearly distinguish actionable targets, predictive signals, current state, and immediate gameplay feedback. Do not show a failure, reset, retry, game-over, or results screen. Do not add weapons, characters, written text, generic buttons, or unrelated objects unless explicitly required by the core gameplay.`;
         const span = trace.startImage(index, { ideaId: idea.id, prompt });
         try {
           const artifact = await this.generateWithRetry({
@@ -83,7 +83,8 @@ async function retryTransient<T>(operation: () => Promise<T>): Promise<T> {
       lastError = error;
       const status = Number((error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode || 0);
       const message = error instanceof Error ? error.message : String(error);
-      const transient = status === 429 || status >= 500 || /(429|5\d\d|timeout|temporar|network|fetch failed|ECONNRESET|ETIMEDOUT)/i.test(message);
+      const transient = status === 429 || status >= 500 ||
+        /(429|5\d\d|timeout|temporar|network|fetch failed|ECONNRESET|ETIMEDOUT|no image data|image size is invalid|generated image size is invalid)/i.test(message);
       if (!transient || attempt === 3) throw error;
       await new Promise((resolve) => setTimeout(resolve, 250 * (2 ** (attempt - 1))));
     }

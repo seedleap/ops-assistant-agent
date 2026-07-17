@@ -94,17 +94,28 @@ function dryRunStage(stage: string, prompt: string): string {
   })) });
   if (stage === "audit") return JSON.stringify({ audits: Array.from({ length: 8 }, (_, index) => ({
     ideaId: `dry-${index + 1}`, loopPass: true, predictionPass: true, interactionPass: true,
-    feasibilityPass: true, costPass: true, fatalReasons: [],
+    feasibilityPass: true, fatalReasons: [],
     evidence: "Visible countdown, direct input, deterministic resolution and immediate retry are specified.",
+    recommendedDowngrade: "No downgrade needed.",
   })) });
   const count = Number(prompt.match(/正好\s+(\d+)\s+项/)?.[1] || 4);
   return JSON.stringify({ ideas: Array.from({ length: count }, (_, index) => ({
     id: `dry-${index + 1}`, title: `Dry-run Idea ${index + 1}`, summary: "A short, visible decision loop for a vertical mobile game.",
     mechanic: `Choose and resolve changing target pattern ${index + 1}.`,
-    interactionPattern: index % 2 ? "timing" : "drag-track", playerAction: "Tap or drag with one thumb.",
-    decision: "Select the best target before time closes.", loop: "Observe, choose, act, resolve, repeat in four seconds.",
+    interactionPattern: index % 2 ? "timing" : "drag-track",
+    playerGoal: "Resolve as many changing targets as possible before the 30-second timer ends.",
+    playerAction: "Tap or drag with one thumb.", gameState: "Targets alternate between warned, active and resolved states.",
+    decision: "Select the best target before time closes.", rules: "Only the visibly warned target scores; a miss resets that target.",
+    loop: "Observe, choose, act, resolve, repeat in four seconds.", failState: "The active target expires before the player resolves it.",
+    feedback: "The target flashes and the next warning appears immediately.",
     failureRecovery: "Only the current target resets after a miss.", whyFun: "Readable pressure and quick mastery.",
-    prototypeTest: "Three successful loops within 30 seconds.", gatePassed: true, fatalReasons: [],
+    prototypeTest: "Three successful loops within 30 seconds.",
+    difficultyCurve: "Warnings shorten after 10 seconds and targets begin moving after 20 seconds.",
+    variationSource: "Target positions and warning order are shuffled each run.",
+    first10Seconds: "One guided target teaches the signal, then three normal four-second loops begin.",
+    funRisks: "Verify that reading the warning creates a real choice instead of a reflex tap.",
+    bindingRationale: "The visible target theme directly controls state and feedback.",
+    gatePassed: true, fatalReasons: [],
     imagePrompt: "A clean portrait game board with targets, countdown, score and a visible successful tap.",
   })) });
 }

@@ -218,8 +218,17 @@ test("health is public while API routes require a valid JWT", async () => {
     await request(app)
       .get(completed.ideas[0].image.url!)
       .set("Authorization", `Bearer ${token}`)
-      .expect("Content-Type", /image\/png/)
-      .expect(200);
+      .expect(404);
+    await request(app)
+      .post(`/ideas/${generated.body.workflow.id}/retry`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ userId: "idea-user" })
+      .expect(404);
+    await request(app)
+      .post(`/ideas/${generated.body.workflow.id}/cancel`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ userId: "idea-user" })
+      .expect(404);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }

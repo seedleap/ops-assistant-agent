@@ -63,9 +63,7 @@ const environmentSchema = z.object({
   IDEA_IMAGE_QUALITY: z.enum(["low", "medium", "high"]).default("low"),
   IDEA_IMAGE_TIMEOUT_MS: positiveInteger(90_000),
   IDEA_ASSET_STORAGE: z.enum(["local", "s3"]).default("local"),
-  IDEA_ASSET_S3_BUCKET: optionalString,
-  IDEA_ASSET_S3_PREFIX: z.string().trim().min(1).default("ideas"),
-  IDEA_ASSET_CDN_BASE_URL: optionalString.pipe(z.string().url().optional()),
+  USER_PUBLIC_IMAGES_BUCKET: optionalString,
   AZURE_IMAGE_BASE_URL: optionalString.pipe(z.string().url().optional()),
   AZURE_IMAGE_API_KEY: optionalString,
   AZURE_IMAGE_DEPLOYMENT: optionalString,
@@ -110,13 +108,6 @@ const environmentSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["LANGFUSE_ENABLED"],
       message: "LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY are required when tracing is enabled",
-    });
-  }
-  if (env.IDEA_ASSET_STORAGE === "s3" && !env.IDEA_ASSET_S3_BUCKET) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["IDEA_ASSET_S3_BUCKET"],
-      message: "IDEA_ASSET_S3_BUCKET is required when IDEA_ASSET_STORAGE=s3",
     });
   }
   if (env.NODE_ENV === "production" && !env.ASSISTANT_DRY_RUN && !env.OPS_MCP_URL) {
@@ -172,9 +163,9 @@ export interface AppConfig {
   };
   ideaAssets: {
     storage: "local" | "s3";
-    bucket?: string;
+    bucket: string;
     prefix: string;
-    cdnBaseUrl?: string;
+    cdnBaseUrl: string;
   };
   modelWhitelist: string[];
   agentProfileOverrides: Partial<Record<AgentProfileId, AgentProfileOverrides>>;
@@ -344,9 +335,13 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     },
     ideaAssets: {
       storage: env.IDEA_ASSET_STORAGE,
-      bucket: env.IDEA_ASSET_S3_BUCKET,
-      prefix: env.IDEA_ASSET_S3_PREFIX,
-      cdnBaseUrl: env.IDEA_ASSET_CDN_BASE_URL,
+      bucket: env.USER_PUBLIC_IMAGES_BUCKET || (env.NODE_ENV === "production"
+        ? "user-public-images-829115578968"
+        : "user-public-images-829115578968-dev"),
+      prefix: "public/ideas",
+      cdnBaseUrl: env.NODE_ENV === "production"
+        ? "https://cdn-cf.loopit.me"
+        : "https://cdn-cf-dev.loopit.me",
     },
     modelWhitelist,
     agentProfileOverrides: {

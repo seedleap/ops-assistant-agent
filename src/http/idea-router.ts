@@ -1,5 +1,4 @@
 import express from "express";
-import { resolve } from "node:path";
 import { z } from "zod";
 import type { AppConfig } from "../config.js";
 import type { IdeaWorkflow } from "../ideas/workflow.js";
@@ -19,8 +18,6 @@ const workflowSchema = z.object({
   forbidden: z.string().trim().max(2_000).optional(),
   count: z.number().int().min(1).max(8).default(4),
 }).strict();
-const actionSchema = z.object({ userId: z.string().trim().min(1).max(128) }).strict();
-
 function requestSubject(req: express.Request): string | undefined {
   const auth = (req as express.Request & { auth?: { sub?: unknown } }).auth;
   return typeof auth?.sub === "string" && auth.sub.trim() ? auth.sub : undefined;
@@ -75,27 +72,6 @@ export function createIdeaRouter(input: {
     }
   });
 
-  router.get("/assets/:filename", (req, res) => {
-    const filename = req.params.filename;
-    if (!/^[a-z0-9_-]+\.png$/i.test(filename)) {
-      res.status(400).json({ error: "invalid image filename" });
-      return;
-    }
-    if (config.auth.mode === "jwt") {
-      const path = `/ideas/assets/${filename}`;
-      const owner = store.snapshot().ideaWorkflows.find((item) =>
-        item.ideas.some((idea) => idea.image.url === path),
-      )?.userId;
-      if (!owner || requestSubject(req) !== owner) {
-        res.status(404).json({ error: "idea image not found" });
-        return;
-      }
-    }
-    res.sendFile(resolve(config.dataDir, "idea-images", filename), (error) => {
-      if (error && !res.headersSent) res.status(404).json({ error: "idea image not found" });
-    });
-  });
-
   router.get("/:id", (req, res) => {
     const record = store.getIdeaWorkflow(req.params.id);
     if (!record) {
@@ -114,34 +90,6 @@ export function createIdeaRouter(input: {
       return;
     }
     res.json({ workflow: publicWorkflow(record) });
-  });
-
-  router.post("/:id/retry", async (req, res, next) => {
-    try {
-      if (!workflow) {
-        res.status(503).json({ error: "idea workflow is unavailable" });
-        return;
-      }
-      const { userId } = actionSchema.parse(req.body);
-      assertUser(req, userId);
-      res.status(202).json({ workflow: publicWorkflow(await workflow.retry(req.params.id, userId)) });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  router.post("/:id/cancel", async (req, res, next) => {
-    try {
-      if (!workflow) {
-        res.status(503).json({ error: "idea workflow is unavailable" });
-        return;
-      }
-      const { userId } = actionSchema.parse(req.body);
-      assertUser(req, userId);
-      res.json({ workflow: publicWorkflow(await workflow.cancel(req.params.id, userId)) });
-    } catch (error) {
-      next(error);
-    }
   });
 
   return router;

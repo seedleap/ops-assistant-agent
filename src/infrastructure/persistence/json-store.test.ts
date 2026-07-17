@@ -65,9 +65,15 @@ test("Idea workflow reads are immutable and image updates are atomic", async () 
     const record = queuedIdeaRecord("idea-images", "submit-images");
     record.ideas = ["a", "b"].map((id) => ({
       id, title: id, summary: id, mechanic: id, interactionPattern: "tap-choice" as const,
-      playerAction: id, decision: id, loop: id,
-      failureRecovery: id, whyFun: id, prototypeTest: id, gatePassed: true,
-      fatalReasons: [], imagePrompt: id, image: { status: "pending" as const },
+      playerGoal: id, playerAction: id, gameState: id, decision: id, rules: id, loop: id,
+      failState: id, feedback: id, failureRecovery: id, whyFun: id, prototypeTest: id,
+      difficultyCurve: id, variationSource: id, first10Seconds: id, funRisks: id, bindingRationale: id,
+      gatePassed: true, fatalReasons: [],
+      audit: {
+        loopPass: true, predictionPass: true, interactionPass: true, feasibilityPass: true,
+        fatalReasons: [], evidence: id, recommendedDowngrade: "none",
+      },
+      imagePrompt: id, image: { status: "pending" as const },
     }));
     await store.createIdeaWorkflow(record);
 

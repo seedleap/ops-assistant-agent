@@ -96,18 +96,23 @@ test("loadConfig requires Langfuse credentials when tracing is enabled", () => {
   );
 });
 
-test("loadConfig requires an S3 bucket for S3 idea assets", () => {
-  assert.throws(
-    () => loadConfig({ IDEA_ASSET_STORAGE: "s3" }),
-    (error) => error instanceof ConfigError && error.message.includes("IDEA_ASSET_S3_BUCKET"),
-  );
-  const config = loadConfig({
-    IDEA_ASSET_STORAGE: "s3",
-    IDEA_ASSET_S3_BUCKET: "idea-assets",
-    IDEA_ASSET_CDN_BASE_URL: "https://cdn.example.com",
+test("loadConfig uses Carmack public image buckets and CDN hosts", () => {
+  const development = loadConfig({ IDEA_ASSET_STORAGE: "s3" });
+  assert.equal(development.ideaAssets.bucket, "user-public-images-829115578968-dev");
+  assert.equal(development.ideaAssets.cdnBaseUrl, "https://cdn-cf-dev.loopit.me");
+  assert.equal(development.ideaAssets.prefix, "public/ideas");
+
+  const production = loadConfig({
+    NODE_ENV: "production",
+    ASSISTANT_DRY_RUN: "true",
+    STATIC_UI_ENABLED: "false",
+    CORS_ORIGINS: "https://ops.loopit.me",
+    API_AUTH_MODE: "jwt",
+    API_JWT_SECRET: "a".repeat(32),
+    USER_PUBLIC_IMAGES_BUCKET: "custom-public-images",
   });
-  assert.equal(config.ideaAssets.storage, "s3");
-  assert.equal(config.ideaAssets.bucket, "idea-assets");
+  assert.equal(production.ideaAssets.bucket, "custom-public-images");
+  assert.equal(production.ideaAssets.cdnBaseUrl, "https://cdn-cf.loopit.me");
 });
 
 test("loadConfig rejects profiles outside the model whitelist", () => {

@@ -4,9 +4,9 @@
 
 # Audit contract
 
-严格按照用户消息中给出的 JSON 字段逐项审计全部候选，并只返回一个合法 JSON 对象。不要使用 Markdown 代码块，不要输出额外解释。loopPass 检查观察、判断、动作、状态变化和反馈能否闭环；predictionPass 检查结果是否能由玩家看到的信号合理预判；interactionPass 检查核心输入是否清楚、稳定且适合目标平台；feasibilityPass 检查是否能以普通 Web 游戏能力做出灰盒；costPass 检查资产和调试成本是否与短期验证相称。
+严格按照用户消息中给出的 JSON 字段逐项审计全部候选，并只返回一个合法 JSON 对象。不要使用 Markdown 代码块，不要输出额外解释。loopPass 检查观察、判断、动作、状态变化和反馈能否闭环；predictionPass 检查结果是否能由玩家看到的信号合理预判；interactionPass 检查核心输入是否清楚、稳定且适合目标平台；feasibilityPass 检查是否能以普通 Web 游戏能力做出灰盒。不审核制作成本。
 
-任何关键环节缺失都必须在 fatalReasons 中指出，不能因为题材吸引人、美术潜力高或用户偏好吻合而放宽。fatalReasons 必须始终是 JSON 数组，无问题时返回 []，禁止返回“无”等字符串。任何 fatalReasons 都必须至少对应一个 false，任何 false 都必须给出 fatalReasons。evidence 必须引用候选中已有的具体机制，不能写空泛评价。
+任何关键环节缺失都必须在 fatalReasons 中指出，不能因为题材吸引人、美术潜力高或用户偏好吻合而放宽。fatalReasons 必须始终是 JSON 数组，无问题时返回 []，禁止返回“无”等字符串。任何 fatalReasons 都必须至少对应一个 false，任何 false 都必须给出 fatalReasons。evidence 必须引用候选中已有的具体机制，不能写空泛评价。recommendedDowngrade 记录失败项的最小降级建议，通过时写“无需降级”。
 
 整局目标不能代替 3 到 5 秒核心循环；不可见信号、没有明确提前量、反馈后不产生下一次新判断，都必须判定对应门禁失败。
 

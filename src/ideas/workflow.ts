@@ -215,7 +215,7 @@ export class IdeaWorkflow {
         await this.store.updateIdeaWorkflow(id, { stage: "audit" });
         auditResult = await this.structuredStage(
           trace, record, "idea-auditor", "audit", auditsSchema,
-          `逐项审计候选。创作命题：\n${JSON.stringify(brief)}\n\n候选：\n${JSON.stringify(invention.kernels)}\n\n返回 {"audits":[...]}。每项字段必须是 ideaId、loopPass、predictionPass、interactionPass、feasibilityPass、costPass、fatalReasons、evidence。ideaId 对应候选 id。fatalReasons 必须始终是 JSON 数组，无问题时返回 []，禁止返回字符串。loopContract 若只是整局目标而非 3-5 秒观察→判断→动作→反馈闭环，loopPass 必须为 false；visibleSignal 不可见、predictionWindow 没有明确提前量或 nextDecision 不产生新判断时，predictionPass 必须为 false；成本判断只能依据候选已写出的交互和资产，不得空泛声称成本低。任何 fatalReasons 都必须至少对应一个 false；任何 false 都必须说明 fatalReasons。`,
+          `逐项审计候选。创作命题：\n${JSON.stringify(brief)}\n\n候选：\n${JSON.stringify(invention.kernels)}\n\n返回 {"audits":[...]}。每项字段必须是 ideaId、loopPass、predictionPass、interactionPass、feasibilityPass、fatalReasons、evidence、recommendedDowngrade。ideaId 对应候选 id。fatalReasons 必须始终是 JSON 数组，无问题时返回 []，禁止返回字符串；evidence 必须引用候选中的具体机制；recommendedDowngrade 写审核失败时不改变核心玩法的最小降级建议，通过时写“无需降级”。loopContract 若只是整局目标而非 3-5 秒观察→判断→动作→反馈闭环，loopPass 必须为 false；visibleSignal 不可见、predictionWindow 没有明确提前量或 nextDecision 不产生新判断时，predictionPass 必须为 false。任何 fatalReasons 都必须至少对应一个 false；任何 false 都必须说明 fatalReasons。`,
           (value) => validateAudits(invention!.kernels, value.audits),
         );
         await this.store.updateIdeaWorkflow(id, { checkpoints: { ...record.checkpoints, invention, audits: auditResult } });
@@ -248,7 +248,7 @@ export class IdeaWorkflow {
         await this.store.updateIdeaWorkflow(id, { stage: "converge" });
         const convergence = await this.structuredStage(
           trace, record, "idea-converger", "converge", convergenceSchema,
-          `从候选中选择 ${desiredCount} 个方向并规格化。创作命题：\n${JSON.stringify(brief)}\n\n候选：\n${JSON.stringify(invention.kernels)}\n\n审计：\n${JSON.stringify(auditResult.audits)}\n\n返回 {"ideas":[...]}，必须正好 ${desiredCount} 项。每项字段必须是 id、title、summary、mechanic、interactionPattern、playerAction、decision、loop、failureRecovery、whyFun、prototypeTest、imagePrompt。interactionPattern 必须与原候选一致；当候选中存在足够多不同 interactionPattern 时，最终结果不得重复 interactionPattern。gatePassed 和 fatalReasons 由程序根据审计结果附加，不要输出。只输出 JSON，不要解释或 Markdown。`,
+          `从候选中选择 ${desiredCount} 个方向并规格化。创作命题：\n${JSON.stringify(brief)}\n\n候选：\n${JSON.stringify(invention.kernels)}\n\n审计：\n${JSON.stringify(auditResult.audits)}\n\n返回 {"ideas":[...]}，必须正好 ${desiredCount} 项。每项字段必须是 id、title、summary、mechanic、interactionPattern、playerGoal、playerAction、gameState、decision、rules、loop、failState、feedback、failureRecovery、whyFun、prototypeTest、difficultyCurve、variationSource、first10Seconds、funRisks、bindingRationale、imagePrompt。玩法字段必须具体到对象、状态、阈值或条件；first10Seconds 写清前 10 秒发生什么；difficultyCurve 写 30-60 秒内如何至少升级两次；variationSource 写下一局为何不同；funRisks 写最需要真人验证的好玩风险。interactionPattern 必须与原候选一致；当候选中存在足够多不同 interactionPattern 时，最终结果不得重复 interactionPattern。gatePassed、fatalReasons 和完整 audit 由程序根据审计结果附加，不要输出。只输出 JSON，不要解释或 Markdown。`,
           (value) => { normalizeSelectedIdeas(value.ideas, desiredCount, invention!.kernels, auditResult!.audits); },
         );
         selected = normalizeSelectedIdeas(convergence.ideas, desiredCount, invention.kernels, auditResult.audits);

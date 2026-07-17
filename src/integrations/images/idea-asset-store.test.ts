@@ -4,7 +4,7 @@ import { loadConfig } from "../../config.js";
 import { ideaAssetKey } from "./idea-asset-store.js";
 
 test("ideaAssetKey is tenant and workflow scoped", () => {
-  const config = loadConfig({ IDEA_ASSET_S3_PREFIX: "generated/ideas" });
+  const config = loadConfig();
   assert.equal(
     ideaAssetKey(config.ideaAssets, {
       userId: "User / 123",
@@ -12,6 +12,6 @@ test("ideaAssetKey is tenant and workflow scoped", () => {
       workflowId: "idea_abc",
       ideaId: "Idea One",
     }),
-    "generated/ideas/user-123/project-456/idea_abc/idea-one.png",
+    "public/ideas/user-123/project-456/idea_abc/idea-one.png",
   );
 });

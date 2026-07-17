@@ -96,14 +96,33 @@ export interface GeneratedIdea {
   mechanic: string;
   interactionPattern: "tap-choice" | "timing" | "drag-track" | "swipe-path" | "hold-release" |
     "sequence" | "resource-allocation" | "spatial-arrangement" | "other";
+  playerGoal: string;
   playerAction: string;
+  gameState: string;
   decision: string;
+  rules: string;
   loop: string;
+  failState: string;
+  feedback: string;
   failureRecovery: string;
   whyFun: string;
   prototypeTest: string;
+  difficultyCurve: string;
+  variationSource: string;
+  first10Seconds: string;
+  funRisks: string;
+  bindingRationale: string;
   gatePassed: boolean;
   fatalReasons: string[];
+  audit: {
+    loopPass: boolean;
+    predictionPass: boolean;
+    interactionPass: boolean;
+    feasibilityPass: boolean;
+    fatalReasons: string[];
+    evidence: string;
+    recommendedDowngrade: string;
+  };
   imagePrompt: string;
   image: IdeaImageResult;
 }

@@ -92,15 +92,13 @@ Idempotency-Key: u-1-project-1-submit-001
 
 相同用户、相同幂等键和相同入参会返回原任务；相同幂等键换入参返回 `409`。每个 Agent 阶段都保存 checkpoint，进程启动时会恢复 `queued/running` 任务。响应中的每个 `idea` 同时包含玩法文本字段和 `image.url`。
 
-- `GET /ideas/:id?userId=<userId>`：查询状态和结果。
-- `POST /ideas/:id/retry`，body 为 `{ "userId": "..." }`：从最近 checkpoint 重试。
-- `POST /ideas/:id/cancel`，body 为 `{ "userId": "..." }`：请求取消。
+- `GET /ideas/:id?userId=<userId>`：查询状态和结果。Idea 对外只提供提交和查询两个路由。
 
 JWT 模式下，token 的 `sub` 必须与 `userId` 一致。
 
 图片生成优先读取 `IDEA_IMAGE_BASE_URL`、`IDEA_IMAGE_API_KEY`、`IDEA_IMAGE_MODEL`，也兼容现有的 `AZURE_IMAGE_BASE_URL`、`AZURE_IMAGE_API_KEY`、`AZURE_IMAGE_DEPLOYMENT`。未配置图片服务时文本结果仍会保存，workflow 状态为 `completed_with_errors`。
 
-默认图片保存在 `DATA_DIR/idea-images/`。设置 `IDEA_ASSET_STORAGE=s3`、`IDEA_ASSET_S3_BUCKET`、`IDEA_ASSET_S3_PREFIX` 后上传 S3；设置 `IDEA_ASSET_CDN_BASE_URL` 后返回 CDN URL。S3 对象使用不可变缓存头，并按 user/project/workflow/idea 隔离 Key。
+本地开发默认把图片保存在 `DATA_DIR/idea-images/`。生产环境设置 `IDEA_ASSET_STORAGE=s3` 后，图片上传到 Carmack 同款 public-image bucket，并返回 `https://cdn-cf.loopit.me/public/ideas/...`；非生产 S3 环境使用 `https://cdn-cf-dev.loopit.me`。对象使用不可变缓存头，并按 user/project/workflow/idea 隔离 Key。仅在部署需要覆盖默认 bucket 时设置 `USER_PUBLIC_IMAGES_BUCKET`。
 
 启用现有 `LANGFUSE_ENABLED=true` 后，每次任务只产生一个名为 `idea` 的 trace。发明、审计、收敛和图片生成是其阶段 span；每个 Pi Agent 的 turn、token 与 cost 继续作为对应阶段的子 observation，因此会自动汇总到同一个 trace。根 trace 记录 checkpoint attempt、图片失败数和最终状态，不记录图片 base64 或凭证。
 

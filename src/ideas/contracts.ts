@@ -35,19 +35,25 @@ export const kernelSchema = z.object({
 
 export const auditSchema = z.object({
   ideaId: ideaIdSchema, loopPass: z.boolean(), predictionPass: z.boolean(),
-  interactionPass: z.boolean(), feasibilityPass: z.boolean(), costPass: z.boolean(),
+  interactionPass: z.boolean(), feasibilityPass: z.boolean(),
   fatalReasons: z.array(ideaTextSchema).max(8), evidence: ideaTextSchema,
+  recommendedDowngrade: ideaTextSchema,
 });
 
 export const selectedIdeaDraftSchema = z.object({
   id: ideaIdSchema, title: ideaTextSchema, summary: ideaTextSchema, mechanic: ideaTextSchema,
   interactionPattern: interactionPatternSchema,
-  playerAction: ideaTextSchema, decision: ideaTextSchema, loop: ideaTextSchema,
+  playerGoal: ideaTextSchema, playerAction: ideaTextSchema, gameState: ideaTextSchema,
+  decision: ideaTextSchema, rules: ideaTextSchema, loop: ideaTextSchema,
+  failState: ideaTextSchema, feedback: ideaTextSchema,
   failureRecovery: ideaTextSchema, whyFun: ideaTextSchema, prototypeTest: ideaTextSchema,
+  difficultyCurve: ideaTextSchema, variationSource: ideaTextSchema,
+  first10Seconds: ideaTextSchema, funRisks: ideaTextSchema, bindingRationale: ideaTextSchema,
   imagePrompt: ideaTextSchema,
 });
 export const selectedIdeaSchema = selectedIdeaDraftSchema.extend({
   gatePassed: z.boolean(), fatalReasons: z.array(ideaTextSchema).max(8),
+  audit: auditSchema.omit({ ideaId: true }),
 });
 
 export const inventionSchema = z.object({ kernels: z.array(kernelSchema).min(1).max(16) });
@@ -113,7 +119,6 @@ export function validateAudits(kernels: Invention["kernels"], audits: Audits["au
       audit.predictionPass,
       audit.interactionPass,
       audit.feasibilityPass,
-      audit.costPass,
     ].every(Boolean);
     if (allPassed !== (audit.fatalReasons.length === 0)) {
       throw new Error(`audit verdict is inconsistent for ${audit.ideaId}`);
@@ -145,8 +150,21 @@ export function normalizeSelectedIdeas(
       throw new Error(`selected idea changed interaction pattern: ${idea.id}`);
     }
     const audit = auditById.get(idea.id)!;
-    const gatePassed = [audit.loopPass, audit.predictionPass, audit.interactionPass, audit.feasibilityPass, audit.costPass]
+    const gatePassed = [audit.loopPass, audit.predictionPass, audit.interactionPass, audit.feasibilityPass]
       .every(Boolean) && audit.fatalReasons.length === 0;
-    return { ...idea, gatePassed, fatalReasons: [...audit.fatalReasons] };
+    return {
+      ...idea,
+      gatePassed,
+      fatalReasons: [...audit.fatalReasons],
+      audit: {
+        loopPass: audit.loopPass,
+        predictionPass: audit.predictionPass,
+        interactionPass: audit.interactionPass,
+        feasibilityPass: audit.feasibilityPass,
+        fatalReasons: [...audit.fatalReasons],
+        evidence: audit.evidence,
+        recommendedDowngrade: audit.recommendedDowngrade,
+      },
+    };
   });
 }

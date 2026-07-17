@@ -57,9 +57,9 @@ test("IdeaWorkflow runs isolated Pi profiles and returns text plus image", async
             predictionPass: true,
             interactionPass: true,
             feasibilityPass: true,
-            costPass: true,
             fatalReasons: [],
             evidence: "visible timer and deterministic tap",
+            recommendedDowngrade: "none",
           })) });
         }
         return JSON.stringify({ ideas: Array.from({ length: 2 }, (_, index) => ({
@@ -68,20 +68,34 @@ test("IdeaWorkflow runs isolated Pi profiles and returns text plus image", async
           summary: "short game idea",
           mechanic: `timed target choice ${index + 1}`,
           interactionPattern: index % 2 ? "timing" : "drag-track",
+          playerGoal: "score before timeout",
           playerAction: "tap a target",
+          gameState: "target is warned or active",
           decision: "choose before timeout",
+          rules: "only warned targets score",
           loop: "observe, choose, resolve",
+          failState: "target expires",
+          feedback: "target flashes",
           failureRecovery: "retry current target",
           whyFun: "fast mastery",
           prototypeTest: "three loops in 30 seconds",
-          gatePassed: false,
-          fatalReasons: [],
+          difficultyCurve: "warnings shorten twice",
+          variationSource: "target positions shuffle",
+          first10Seconds: "guided target then normal loops",
+          funRisks: "choice may feel automatic",
+          bindingRationale: "theme controls target state",
           imagePrompt: "portrait game board with a visible timer",
         })) });
       },
     } as unknown as OpsAssistant;
+    const imageAttempts = new Map<string, number>();
     const images: IdeaImageGenerator = {
-      generate: async () => ({ bytes: Buffer.from("png"), mimeType: "image/png", model: "fake-image" }),
+      generate: async ({ ideaId }) => {
+        const attempt = (imageAttempts.get(ideaId) || 0) + 1;
+        imageAttempts.set(ideaId, attempt);
+        if (ideaId === "k1" && attempt < 3) throw new Error("Image API returned no image data");
+        return { bytes: Buffer.from("png"), mimeType: "image/png", model: "fake-image" };
+      },
     };
     const assets: IdeaAssetStore = {
       put: async ({ ideaId }) => ({ url: `/ideas/assets/${ideaId}.png`, storage: "local" }),
@@ -103,7 +117,10 @@ test("IdeaWorkflow runs isolated Pi profiles and returns text plus image", async
     assert.equal(workflow.ideas.length, 2);
     assert.equal(workflow.ideas[0].image.url, "/ideas/assets/k1.png");
     assert.equal(workflow.ideas[0].image.storage, "local");
+    assert.equal(imageAttempts.get("k1"), 3);
     assert.equal(workflow.ideas[0].gatePassed, true);
+    assert.equal(workflow.ideas[0].audit.evidence, "visible timer and deterministic tap");
+    assert.equal(workflow.ideas[0].playerGoal, "score before timeout");
     assert.ok(workflow.checkpoints.invention);
     assert.ok(workflow.checkpoints.audits);
     assert.ok(workflow.checkpoints.convergence);
