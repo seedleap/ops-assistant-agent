@@ -175,6 +175,126 @@ export function createWorkOverviewTool(client: OpsMcpToolCaller): ToolDefinition
   };
 }
 
+export function createWorkAnalysisTool(client: OpsMcpToolCaller): ToolDefinition {
+  return {
+    name: "query_work_analysis",
+    label: "查本人作品分析指标",
+    description:
+      "查询当前创作者本人作品发布后窗口内的五维分析、原始指标、同类 L2 基线和数据时间。" +
+      "必须同时传 uid 与 pid，由服务端校验归属；用于作品复盘，不得用来读取他人私有数据。",
+    parameters: Type.Object({
+      uid: Type.String({ minLength: 1, maxLength: 128, description: "当前创作者 UID，用于归属校验。" }),
+      pid: Type.String({ minLength: 1, maxLength: 128, description: "待分析作品 PID。" }),
+      windowDays: Type.Optional(Type.Integer({ minimum: 1, maximum: 14, description: "发布后窗口，默认 14 天。" })),
+    }),
+    execute: async (_id, params) => runOpsQuery(client, "query_work_analysis", params as Record<string, unknown>),
+  };
+}
+
+export function createCommentAnalysisTool(client: OpsMcpToolCaller): ToolDefinition {
+  return {
+    name: "analyze_work_comments",
+    label: "分析本人作品评论话题",
+    description:
+      "对当前创作者本人作品的评论做清洗、聚类并返回 3-7 个话题、代表性评论 ID 和数据时间。" +
+      "评论量较少时返回全量可用样本；服务端必须校验作品归属。",
+    parameters: Type.Object({
+      uid: Type.String({ minLength: 1, maxLength: 128, description: "当前创作者 UID，用于归属校验。" }),
+      pid: Type.String({ minLength: 1, maxLength: 128, description: "本人作品 PID。" }),
+      limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 500, description: "最大评论样本数，默认 200。" })),
+      maxTopics: Type.Optional(Type.Integer({ minimum: 3, maximum: 7, description: "最大话题数，默认 5。" })),
+    }),
+    execute: async (_id, params) => runOpsQuery(client, "analyze_work_comments", params as Record<string, unknown>),
+  };
+}
+
+export function createPublicWorkTool(client: OpsMcpToolCaller): ToolDefinition {
+  return {
+    name: "query_public_work",
+    label: "查公开作品学习信息",
+    description:
+      "查询公开作品可展示的标题、描述、公开表现、Power、Hashtag 和评论摘要。" +
+      "不会返回原始上传素材、私人 Power、Prompt 全文或作品源码，适合学习他人作品。",
+    parameters: Type.Object({
+      pid: Type.String({ minLength: 1, maxLength: 128, description: "公开作品 PID。" }),
+      viewerUid: Type.Optional(Type.String({ minLength: 1, maxLength: 128, description: "当前查看者 UID，用于权限审计。" })),
+    }),
+    execute: async (_id, params) => runOpsQuery(client, "query_public_work", params as Record<string, unknown>),
+  };
+}
+
+export function createCreatorAccountSummaryTool(client: OpsMcpToolCaller): ToolDefinition {
+  return {
+    name: "query_creator_account_summary",
+    label: "查创作者账号总览",
+    description:
+      "查询当前创作者近 7 日逐日发布、VV、3s 率、互动、Remix、涨粉、同 Level 匿名基线，" +
+      "以及近半年作品中最近 7 日新增 VV Top3；返回口径与 as_of。内部 Level 只用于比较，不可向用户展示。",
+    parameters: Type.Object({
+      uid: Type.String({ minLength: 1, maxLength: 128, description: "当前创作者 UID。" }),
+      days: Type.Optional(Type.Integer({ minimum: 1, maximum: 30, description: "汇总窗口，默认 7 天。" })),
+      topWorksLimit: Type.Optional(Type.Integer({ minimum: 1, maximum: 5, description: "新增 VV 作品榜数量，默认 3。" })),
+    }),
+    execute: async (_id, params) => runOpsQuery(client, "query_creator_account_summary", params as Record<string, unknown>),
+  };
+}
+
+export function createCreatorInspirationContextTool(client: OpsMcpToolCaller): ToolDefinition {
+  return {
+    name: "query_creator_inspiration_context",
+    label: "查创作者灵感上下文",
+    description:
+      "查询当前创作者最近创作与最近点赞、收藏、评论的公开内容信号，用于生成灵感检索条件。" +
+      "只返回必要摘要和标签，不返回内部画像标签或不必要的个人信息。",
+    parameters: Type.Object({
+      uid: Type.String({ minLength: 1, maxLength: 128, description: "当前创作者 UID。" }),
+      recentWorksLimit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20, description: "最近创作数量，默认 10。" })),
+      recentInteractionsLimit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20, description: "最近互动内容数量，默认 10。" })),
+    }),
+    execute: async (_id, params) => runOpsQuery(client, "query_creator_inspiration_context", params as Record<string, unknown>),
+  };
+}
+
+export function createCreationCatalogSearchTool(client: OpsMcpToolCaller): ToolDefinition {
+  return {
+    name: "search_creation_catalog",
+    label: "搜活动与创作素材目录",
+    description:
+      "搜索当前有效且可公开的活动、作品、Power、Template 与 Hashtag，返回官方入口、有效期、公开字段和相关性依据。" +
+      "搜索结果不是用户资格证明；活动邀请仍需 query_creator_activity_status 确认。",
+    parameters: Type.Object({
+      query: Type.String({ minLength: 1, maxLength: 500, description: "基于用户意图生成的搜索语句。" }),
+      types: Type.Optional(Type.Array(Type.Union([
+        Type.Literal("activity"),
+        Type.Literal("work"),
+        Type.Literal("power"),
+        Type.Literal("template"),
+        Type.Literal("hashtag"),
+      ]), { minItems: 1, maxItems: 5, description: "限定目录类型。" })),
+      limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20, description: "返回数量，默认 10。" })),
+      language: Type.Optional(Type.String({ minLength: 2, maxLength: 20, description: "用户语言。" })),
+      country: Type.Optional(Type.String({ minLength: 2, maxLength: 8, description: "用户国家或地区。" })),
+    }),
+    execute: async (_id, params) => runOpsQuery(client, "search_creation_catalog", params as Record<string, unknown>),
+  };
+}
+
+export function createCreatorActivityStatusTool(client: OpsMcpToolCaller): ToolDefinition {
+  return {
+    name: "query_creator_activity_status",
+    label: "查活动资格与任务状态",
+    description:
+      "从活动运营中台查询创作者的活动有效性、资格、报名、任务进度、奖励、频控、静默、去重和官方 action。" +
+      "这是活动状态的权威只读来源；Agent 只能解释结果，不能自行计算、修改、发放或代领。",
+    parameters: Type.Object({
+      uid: Type.String({ minLength: 1, maxLength: 128, description: "当前创作者 UID。" }),
+      campaignId: Type.Optional(Type.String({ minLength: 1, maxLength: 128, description: "指定活动 ID；省略时返回可展示的当前活动。" })),
+      includeProgress: Type.Optional(Type.Boolean({ description: "是否返回任务进度与奖励状态，默认 true。" })),
+    }),
+    execute: async (_id, params) => runOpsQuery(client, "query_creator_activity_status", params as Record<string, unknown>),
+  };
+}
+
 export function createOpsDataTools(client: OpsMcpToolCaller): ToolDefinition[] {
   return [
     createWorkOverviewTool(client),
@@ -183,5 +303,12 @@ export function createOpsDataTools(client: OpsMcpToolCaller): ToolDefinition[] {
     createWorkConsumptionTool(client),
     createWorkCommentsTool(client),
     createWorkPromptTool(client),
+    createWorkAnalysisTool(client),
+    createCommentAnalysisTool(client),
+    createPublicWorkTool(client),
+    createCreatorAccountSummaryTool(client),
+    createCreatorInspirationContextTool(client),
+    createCreationCatalogSearchTool(client),
+    createCreatorActivityStatusTool(client),
   ];
 }

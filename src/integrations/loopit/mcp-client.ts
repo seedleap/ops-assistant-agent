@@ -8,6 +8,13 @@ export const OPS_MCP_TOOL_NAMES = [
   "query_work_consumption",
   "query_work_comments",
   "query_work_prompt",
+  "query_work_analysis",
+  "analyze_work_comments",
+  "query_public_work",
+  "query_creator_account_summary",
+  "query_creator_inspiration_context",
+  "search_creation_catalog",
+  "query_creator_activity_status",
 ] as const;
 
 export type OpsMcpToolName = typeof OPS_MCP_TOOL_NAMES[number];
@@ -36,11 +43,15 @@ export interface OpsMcpClientConfig {
 export class RemoteOpsMcpClient implements OpsMcpToolCaller {
   private client?: Client;
   private connecting?: Promise<Client>;
+  private availableTools?: ReadonlySet<string>;
 
   constructor(private readonly config: OpsMcpClientConfig) {}
 
   async callTool(name: OpsMcpToolName, args: Record<string, unknown>): Promise<OpsMcpCallResult> {
     const client = await this.connect();
+    if (!this.availableTools?.has(name)) {
+      throw new Error(`MCP server does not provide tool: ${name}`);
+    }
     const result = await client.callTool(
       { name, arguments: args },
       undefined,
@@ -57,6 +68,7 @@ export class RemoteOpsMcpClient implements OpsMcpToolCaller {
     const client = this.client;
     this.client = undefined;
     this.connecting = undefined;
+    this.availableTools = undefined;
     await client?.close();
   }
 
@@ -80,6 +92,7 @@ export class RemoteOpsMcpClient implements OpsMcpToolCaller {
       if (this.client === client) {
         this.client = undefined;
         this.connecting = undefined;
+        this.availableTools = undefined;
       }
     };
     const headers = this.config.token
@@ -98,11 +111,10 @@ export class RemoteOpsMcpClient implements OpsMcpToolCaller {
     try {
       await client.connect(transport, { timeout: this.config.timeoutMs });
       const listed = await client.listTools(undefined, { timeout: this.config.timeoutMs });
-      const available = new Set(listed.tools.map((tool) => tool.name));
-      const missing = OPS_MCP_TOOL_NAMES.filter((name) => !available.has(name));
-      if (missing.length > 0) {
-        throw new Error(`MCP server is missing required tools: ${missing.join(", ")}`);
-      }
+      // Tool contracts are rolled out independently. Keep existing scenarios available
+      // when a newly introduced creator-support tool has not reached the MCP service yet;
+      // fail only the requested capability with an explicit diagnostic.
+      this.availableTools = new Set(listed.tools.map((tool) => tool.name));
       this.client = client;
       return client;
     } catch (error) {

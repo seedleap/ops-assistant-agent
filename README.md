@@ -1,6 +1,6 @@
 # Loopit 创作者运营 Agent
 
-面向创作者运营场景的 Agent 服务：通过 IM 生成个性化触达内容，按需读取运营知识和远程业务 Skill，并通过 MCP 查询创作者、作品和活动数据。
+面向创作者全周期支持的 Agent 服务：覆盖创作前灵感与辅助创作、创作后作品/账号/评论分析、活动任务解释和产品答疑，并通过 MCP 读取创作者、作品、目录与活动权威状态。
 
 ## 当前能力
 
@@ -12,6 +12,9 @@
 - 远程业务 Skill 从 S3 物料化到会话目录，同样由 Pi 内置 `read` 工具只读加载。
 - 默认 Skill 及其 `docs/` 参考资料通过 Pi 内置 `read` 工具读取。
 - Loopit 业务数据通过 Streamable HTTP MCP 访问，不在本项目内实现数据查询逻辑。
+- `creator-analysis`、`creator-inspiration`、`creator-guide`、`ops-activities` 四个默认 Skill 按场景加载。
+- 本人作品分析、评论聚类、账号总览、公开作品学习、灵感检索和活动状态使用独立只读工具契约。
+- 所有分析要求携带数据窗口或 `as_of`；Creator Score、Level、L2 等内部标签不向创作者展示。
 - 可选 Langfuse trace，记录模型、工具、Token 和费用信息。
 
 ## 快速启动
@@ -91,3 +94,4 @@ pnpm start          # 运行构建产物
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - [`docs/CREATOR-OPERATIONS-CONTEXT.md`](docs/CREATOR-OPERATIONS-CONTEXT.md)
+- [`docs/CREATOR-SUPPORT-ARCHITECTURE.md`](docs/CREATOR-SUPPORT-ARCHITECTURE.md)

@@ -22,30 +22,32 @@ test("creator chat prompt preserves evidence, safety and action contracts", asyn
   const prompt = await readProfilePrompt("creator-chat.md");
 
   assert.match(prompt, /不索要真实姓名、联系方式、学校、住址/);
-  assert.match(prompt, /不得编造数据、活动、奖励、Level、曝光机会、活动资格或官方承诺/);
-  assert.match(prompt, /每次最多追问一个最关键的问题/);
-  assert.match(prompt, /一句话结论/);
-  assert.match(prompt, /一到三条关键证据，并带上时间范围/);
-  assert.match(prompt, /一个优先级最高、可以直接执行的修改建议/);
-  assert.match(prompt, /不得暗示参加后一定获得曝光、奖励、升级或官方推荐/);
-  assert.match(prompt, /你不是活动、任务、积分或客户端系统/);
-  assert.match(prompt, /活动说明或运营知识只能证明“规则是什么”/);
-  assert.match(prompt, /只有收到活动中台确认的资格状态/);
-  assert.match(prompt, /只复述活动中台返回的当前状态，不根据作品数据自行推算/);
+  assert.match(prompt, /不得编造数据、活动、奖励、资格、Level、曝光机会或官方承诺/);
+  assert.match(prompt, /必要时最多追问一个关键问题/);
+  assert.match(prompt, /一句结论/);
+  assert.match(prompt, /1-3 条证据与时间/);
+  assert.match(prompt, /一个最高优先级修改/);
+  assert.match(prompt, /不承诺曝光、流量、排名、升级、积分或奖励结果/);
+  assert.match(prompt, /你不是数据计算、活动、任务、积分、消息或客户端系统/);
+  assert.match(prompt, /运营规则只能证明“规则是什么”/);
+  assert.match(prompt, /只有资格为已确认且活动有效时/);
+  assert.match(prompt, /不根据作品数据自行推算/);
+  assert.match(prompt, /Creator Score、Type、Path、Level、Age、Barrier、L2/);
+  assert.match(prompt, /引用数据时说明 `as_of` 或时间范围/);
 });
 
 test("creator outreach prompt preserves value gate and no-send contract", async () => {
   const prompt = await readProfilePrompt("creator-outreach.md");
 
-  assert.match(prompt, /减少无价值打扰/);
+  assert.match(prompt, /减少打扰/);
   assert.match(prompt, /内容与最近一次触达重复/);
   assert.match(prompt, /当前仍处于静默窗口/);
-  assert.match(prompt, /不得编造数据变化、活动、奖励、资格、Level、曝光机会或官方承诺/);
+  assert.match(prompt, /只使用本轮查询的事实/);
   assert.match(prompt, /中文通常不超过 80 个字/);
-  assert.match(prompt, /NO_OUTREACH: <一句话内部原因>/);
-  assert.match(prompt, /不对曝光、奖励、资格、升级或结果作保证/);
-  assert.match(prompt, /你处于多平台创作者运营链路的表达层/);
-  assert.match(prompt, /运营人群标签只代表候选范围，不等于活动资格/);
-  assert.match(prompt, /必须同时具备活动中台确认的当前资格、有效活动状态和官方行动入口/);
-  assert.match(prompt, /结构化活动卡片中的活动 ID、任务、奖励、进度、按钮和跳转地址/);
+  assert.match(prompt, /NO_OUTREACH: <一句话内部原因码和说明>/);
+  assert.match(prompt, /不保证曝光、奖励、资格、升级或结果/);
+  assert.match(prompt, /你只负责在活动运营中台完成硬规则筛选后/);
+  assert.match(prompt, /运营人群标签和目录搜索结果都不等于资格/);
+  assert.match(prompt, /活动有效、资格已确认、年龄路线允许、官方 action 可用/);
+  assert.match(prompt, /Creator Score、Type、Path、Level、Age、Barrier、L2/);
 });

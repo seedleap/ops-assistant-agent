@@ -5,7 +5,7 @@ import express from "express";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { OPS_MCP_TOOL_NAMES, RemoteOpsMcpClient } from "./mcp-client.js";
+import { RemoteOpsMcpClient } from "./mcp-client.js";
 
 test("remote MCP client authenticates, discovers the allowlist and calls a tool", async () => {
   const app = express();
@@ -15,7 +15,7 @@ test("remote MCP client authenticates, discovers the allowlist and calls a tool"
   app.post("/mcp", async (req, res) => {
     authorizationHeaders.push(req.header("authorization"));
     const mcp = new McpServer({ name: "ops-data-test", version: "1.0.0" });
-    for (const name of OPS_MCP_TOOL_NAMES) {
+    for (const name of ["query_work_overview"] as const) {
       mcp.registerTool(name, {
         description: `Test ${name}`,
         inputSchema: z.object({}).passthrough(),
@@ -46,6 +46,10 @@ test("remote MCP client authenticates, discovers the allowlist and calls a tool"
     const text = result.content?.find((item) => item.type === "text")?.text;
     assert.match(String(text), /query_work_overview/);
     assert.match(String(text), /p_1/);
+    await assert.rejects(
+      client.callTool("query_creator_activity_status", { uid: "u_1" }),
+      /does not provide tool: query_creator_activity_status/,
+    );
     assert.ok(authorizationHeaders.length >= 3);
     assert.ok(authorizationHeaders.every((value) => value === "Bearer test-service-token"));
   } finally {

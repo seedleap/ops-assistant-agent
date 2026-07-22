@@ -4,7 +4,7 @@ export const CREATOR_OUTREACH_PROFILE = {
   runType: "outreach",
   traceName: "ops-creator-outreach",
   prompt: {
-    version: "creator-outreach-v2",
+    version: "creator-outreach-v3",
     fileName: "creator-outreach.md",
   },
   model: {
@@ -26,7 +26,11 @@ export const CREATOR_OUTREACH_PROFILE = {
     "query_work_profile",
     "query_work_consumption",
     "query_work_comments",
+    "query_creator_account_summary",
+    "query_creator_inspiration_context",
+    "search_creation_catalog",
+    "query_creator_activity_status",
   ],
-  localSkills: ["creator-guide", "ops-activities"],
+  localSkills: ["creator-analysis", "creator-inspiration", "creator-guide", "ops-activities"],
   skills: [],
 } as const satisfies AgentProfileDefinition;

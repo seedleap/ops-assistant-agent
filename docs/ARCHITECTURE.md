@@ -37,6 +37,9 @@ console, data platform, activity core and client retain their own authoritative
 state; the Agent personalizes and explains confirmed facts but does not own
 eligibility, enrollment, task progress, rewards or card state. See
 [`CREATOR-OPERATIONS-CONTEXT.md`](CREATOR-OPERATIONS-CONTEXT.md).
+The creator-facing scenario architecture, new MCP contracts and the exact delta
+from `origin/main` are documented in
+[`CREATOR-SUPPORT-ARCHITECTURE.md`](CREATOR-SUPPORT-ARCHITECTURE.md).
 
 ## Source layout
 
@@ -114,8 +117,8 @@ Pi `DefaultResourceLoader` 自动发现这些目录，把名称和描述注册�
 
 There are two profiles:
 
-- `creator-chat`: full read-only diagnostic tool set, interactive compaction enabled.
-- `creator-outreach`: smaller tool set, fewer turns and no cross-run compaction.
+- `creator-chat`: full creator-support tool set for analysis, inspiration, activities and product guidance; interactive compaction enabled.
+- `creator-outreach`: value-gated outreach tool set with authoritative activity status; fewer turns and no cross-run compaction.
 
 Each profile definition is a small, static composition root that controls:
 

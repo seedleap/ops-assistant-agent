@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { resolve } from "node:path";
 import test from "node:test";
 import { loadConfig } from "../../config.js";
 import { AGENT_PROFILES, AGENT_PROFILE_IDS, isAgentProfileId } from "./catalog.js";
@@ -28,21 +29,24 @@ test("each Agent Profile owns its prompt, tools and runtime policy", () => {
   });
 
   const chat = resolveAgentProfileById(config, "creator-chat");
-  assert.equal(chat.prompt.file, "/tmp/ops-agent-prompts/creator-chat.md");
-  assert.equal(chat.prompt.version, "creator-growth-v2");
+  assert.equal(chat.prompt.file, resolve("/tmp/ops-agent-prompts/creator-chat.md"));
+  assert.equal(chat.prompt.version, "creator-support-v3");
   assert.equal(chat.runtime.maxTurns, 12);
   assert.equal(chat.runtime.maxRetries, 2);
   assert.equal(chat.runtime.compactionEnabled, true);
   assert.ok(chat.toolNames.includes("query_work_prompt"));
-  assert.deepEqual(chat.localSkills, ["creator-guide", "ops-activities"]);
+  assert.ok(chat.toolNames.includes("query_work_analysis"));
+  assert.ok(chat.toolNames.includes("query_creator_activity_status"));
+  assert.deepEqual(chat.localSkills, ["creator-analysis", "creator-inspiration", "creator-guide", "ops-activities"]);
 
   const outreach = resolveAgentProfileById(config, "creator-outreach");
-  assert.equal(outreach.prompt.file, "/tmp/ops-agent-prompts/creator-outreach.md");
-  assert.equal(outreach.prompt.version, "creator-outreach-v2");
+  assert.equal(outreach.prompt.file, resolve("/tmp/ops-agent-prompts/creator-outreach.md"));
+  assert.equal(outreach.prompt.version, "creator-outreach-v3");
   assert.equal(outreach.runtime.timeoutMs, 45_000);
   assert.equal(outreach.runtime.compactionEnabled, false);
   assert.ok(!outreach.toolNames.includes("query_work_prompt"));
-  assert.deepEqual(outreach.localSkills, ["creator-guide", "ops-activities"]);
+  assert.ok(outreach.toolNames.includes("query_creator_activity_status"));
+  assert.deepEqual(outreach.localSkills, ["creator-analysis", "creator-inspiration", "creator-guide", "ops-activities"]);
 });
 
 test("run input selects the Profile and only chat accepts an allowed model override", () => {

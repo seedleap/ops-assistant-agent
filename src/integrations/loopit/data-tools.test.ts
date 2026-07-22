@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCreatorWorksTool, createWorkOverviewTool } from "./data-tools.js";
+import {
+  createCreatorActivityStatusTool,
+  createCreatorWorksTool,
+  createOpsDataTools,
+  createWorkAnalysisTool,
+  createWorkOverviewTool,
+} from "./data-tools.js";
 import type { OpsMcpToolCaller, OpsMcpToolName } from "./mcp-client.js";
 
 interface TestToolResult {
@@ -49,4 +55,36 @@ test("ops tools keep transport diagnostics out of model-facing errors", async ()
   assert.match(result.content[0].text, /运营数据服务暂时不可用/);
   assert.doesNotMatch(result.content[0].text, /private-token/);
   assert.match(String(result.details.error), /private-token/);
+});
+
+test("creator-support tools preserve ownership and authority arguments", async () => {
+  const calls: Array<{ name: OpsMcpToolName; args: Record<string, unknown> }> = [];
+  const client: OpsMcpToolCaller = {
+    async callTool(name, args) {
+      calls.push({ name, args });
+      return { structuredContent: { ok: true, as_of: "2026-07-22T00:00:00+08:00" } };
+    },
+  };
+
+  await execute(createWorkAnalysisTool(client) as ReturnType<typeof createCreatorWorksTool>, {
+    uid: "u_1",
+    pid: "p_1",
+    windowDays: 14,
+  });
+  await execute(createCreatorActivityStatusTool(client) as ReturnType<typeof createCreatorWorksTool>, {
+    uid: "u_1",
+    campaignId: "campaign_1",
+    includeProgress: true,
+  });
+
+  assert.deepEqual(calls, [
+    { name: "query_work_analysis", args: { uid: "u_1", pid: "p_1", windowDays: 14 } },
+    {
+      name: "query_creator_activity_status",
+      args: { uid: "u_1", campaignId: "campaign_1", includeProgress: true },
+    },
+  ]);
+  const names = createOpsDataTools(client).map((tool) => tool.name);
+  assert.equal(names.length, new Set(names).size);
+  assert.equal(names.length, 13);
 });

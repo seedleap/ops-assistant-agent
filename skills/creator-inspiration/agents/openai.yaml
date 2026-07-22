@@ -1,0 +1,4 @@
+interface:
+  display_name: "Creator Inspiration"
+  short_description: "Generate relevant ideas and executable creation prompts"
+  default_prompt: "Use $creator-inspiration to turn my direction into a focused idea and executable Loopit prompt."

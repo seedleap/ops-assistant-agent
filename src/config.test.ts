@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import test from "node:test";
 import { ConfigError, loadConfig } from "./config.js";
 
@@ -40,7 +41,7 @@ test("loadConfig parses explicit runtime values", () => {
   assert.equal(config.agentProfileOverrides["creator-chat"]?.model?.temperature, 0.4);
   assert.equal(config.agentProfileOverrides["creator-chat"]?.runtime?.maxTurns, 10);
   assert.equal(config.agentProfileOverrides["creator-outreach"]?.runtime?.maxTurns, 6);
-  assert.match(config.agentPromptsDir, /config\/agent-profiles$/);
+  assert.ok(config.agentPromptsDir.endsWith(join("config", "agent-profiles")));
 });
 
 test("loadConfig requires JWT authentication configuration in production", () => {

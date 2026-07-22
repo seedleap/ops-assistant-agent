@@ -1,0 +1,4 @@
+interface:
+  display_name: "Creator Analysis"
+  short_description: "Analyze creator work, comments, and account evidence"
+  default_prompt: "Use $creator-analysis to analyze my creator data and recommend one evidence-based next step."
