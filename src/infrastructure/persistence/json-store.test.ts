@@ -47,3 +47,33 @@ test("conversation recovery keeps messages after the Pi session directory is los
     await rm(dataDir, { recursive: true, force: true });
   }
 });
+
+test("creator memory carries safe preferences and project refs across threads", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "ops-memory-"));
+  try {
+    const store = await JsonStore.open(dataDir);
+    await store.recordUserMessage({
+      userId: "u-memory",
+      imThreadId: "thread-a",
+      text: "我喜欢音乐游戏，回答时请简短一些。看看 https://share.loopit.me/game/p_88",
+    });
+    await store.recordAssistantMessage({
+      userId: "u-memory",
+      imThreadId: "thread-a",
+      text: "收到，我会简洁回答。",
+    });
+    await store.updateConversationSummary("u-memory", "thread-a");
+
+    const recovery = store.buildRecoveryContext("u-memory", "thread-b");
+    assert.match(recovery, /<structured_memory>/);
+    assert.match(recovery, /回答时请简短一些/);
+    assert.match(recovery, /p_88/);
+    assert.doesNotMatch(recovery, /<recent_context>/);
+
+    const reopened = await JsonStore.open(dataDir);
+    assert.equal(reopened.snapshot().creatorMemories.length, 1);
+    assert.match(reopened.getCreatorMemory("u-memory")?.stablePreferences.join(" ") ?? "", /音乐游戏/);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});

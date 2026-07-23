@@ -4,7 +4,7 @@ export const CREATOR_OUTREACH_PROFILE = {
   runType: "outreach",
   traceName: "ops-creator-outreach",
   prompt: {
-    version: "creator-outreach-v5-rpd4291",
+    version: "creator-outreach-v6-contract",
     fileName: "creator-outreach.md",
   },
   model: {
@@ -21,7 +21,7 @@ export const CREATOR_OUTREACH_PROFILE = {
   },
   toolNames: [
     "read",
-    "creator_activity_status",
+    "query_creator_activity_status",
   ],
   localSkills: ["ops-activities"],
   skills: [],

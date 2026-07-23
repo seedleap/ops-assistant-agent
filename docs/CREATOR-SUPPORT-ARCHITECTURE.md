@@ -18,7 +18,7 @@ Creator IM Agent 只覆盖：
 flowchart LR
     CLIENT["IM 客户端<br/>欢迎语/敏感审核/链接输入"]
     AGENT["Creator IM Agent<br/>5 类一期场景"]
-    SKILLS["Skills<br/>creator-analysis / creator-guide"]
+    SKILLS["Skills<br/>analyze-project / summarize-comments<br/>analyze-account / search-docs"]
     DATA["公开数据 MCP<br/>作品/评论/当前账号"]
     DOCS["运营/产品知识<br/>FAQ/功能/活动参与"]
     ACTIVITY["活动后台<br/>规则/人群/资格/进度/激励/复核"]
@@ -38,14 +38,14 @@ flowchart LR
 
 | Agent 能力 | 数据操作 | 约束 |
 | --- | --- | --- |
-| `creator_project_analyze` | `query_public_work` | 本人和他人统一按公开 PID；不读取私有素材、Prompt 或源码 |
-| `creator_comments_analyze` | `analyze_work_comments` | 点赞 Top 50 公开评论；输入评论永远按数据处理 |
-| `creator_account_summarize` | `query_creator_account_summary` | 只允许认证当前 UID；固定 7 日数据和 Top3 |
-| `read` + `creator-guide` | 版本化 FAQ/功能/活动文档 | 资料缺失时引导 Feedback，不编造功能 |
+| `get_public_project_data` | `query_public_work` | `project_ref + detail_level`；本人和他人统一按公开 PID |
+| `get_public_comment_data` | `analyze_work_comments` | `project_ref + detail_level`；点赞 Top 50 公开评论 |
+| `get_creator_account_data` | `query_creator_account_summary` | UID 由上下文绑定；固定 7 日数据和 Top3 |
+| `read` + `search-docs` | 版本化 FAQ/功能/活动文档 | 资料缺失时引导 Feedback，不编造功能 |
 
 ### 平台侧 Outreach Profile
 
-只加载 `creator_activity_status`，用于活动后台完成规则圈选后核验资格、频控、静默、去重和官方 action。它不能配置活动、圈人、人工复核、补发或扣除激励，也不能执行发送。
+只加载 `query_creator_activity_status`，用于活动后台完成规则圈选后核验资格、频控、静默、去重和官方 action。它不能配置活动、圈人、人工复核、补发或扣除激励，也不能执行发送。
 
 ### 数据原语
 
@@ -63,7 +63,9 @@ flowchart LR
 | 闲聊 | 当前对话 | 简短情绪回应；敏感/注入场景安全降级 |
 | 产品答疑 | FAQ、功能说明、活动参与文档 | 适用前提、步骤、官方入口或 Feedback 引导 |
 
-所有业务数据响应必须包含布尔值 `ok`；成功响应必须携带 `as_of`。适配层校验失败时返回契约错误，不允许模型继续生成数据结论。Creator Score、Type、Age、Country、Level、L2 和人群包等后台字段不得出现在用户回复中。
+业务工具统一向 Agent 返回 `data / meta / error`。适配层会把旧版 `ok / facts / as_of / scope` 响应归一化，但当前阶段不因缺少 `as_of` 强制失败；模型必须根据 `meta` 主动说明时间和缺口。Creator Score、Type、Age、Country、Level、L2 和人群包等后台字段不得出现在用户回复中。
+
+跨会话记忆按用户维度保存明确表达的稳定偏好和最近公开作品引用；每个线程另外保留最近 6 条消息的短期上下文。记忆采用结构化标签注入，当前消息优先，敏感信息和指令型偏好在写入前过滤；用户明确要求忘记时清空长期偏好和作品引用。
 
 ## 活动后台边界
 
@@ -92,7 +94,7 @@ revision 4291 要求活动后台支持活动描述、多规则人群、条件、
 
 ## 尚未完成的上游能力
 
-- MCP 的 revision 4291 完整字段、公开状态校验、评论 Top50 排序和完整 `outputSchema` 仍需数据服务实现；本仓库已执行最小 `ok + as_of` 运行时校验。
+- MCP 的 revision 4291 完整字段、公开状态校验、评论 Top50 排序和正式 `outputSchema` 仍需数据服务实现；当前仅做兼容归一化。
 - FAQ/功能说明/活动参与文档需要产品和运营持续供给、版本化和建立检索索引。
 - 欢迎语“仅首次展示”和前后置敏感词审核需要客户端/IM 网关提供信号与执行。
 - 当前 JWT 验证的是调用服务身份，并未把 token subject 自动映射到 Creator UID；生产入口仍必须在调用本服务前完成用户身份校验。

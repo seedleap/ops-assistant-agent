@@ -3,37 +3,37 @@
     "id": "own-public-project",
     "runType": "interactive",
     "prompt": "分析一下我这个公开作品 p_1001 为什么 VV 比较低",
-    "expectedTools": ["creator_project_analyze"]
+    "expectedTools": ["query_public_work"]
   },
   {
     "id": "other-public-project",
     "runType": "interactive",
     "prompt": "这个大佬的公开作品 p_9001 用了哪些 Power，有什么可借鉴的？",
-    "expectedTools": ["creator_project_analyze"]
+    "expectedTools": ["query_public_work"]
   },
   {
     "id": "project-link",
     "runType": "interactive",
     "prompt": "帮我看看这个作品怎么优化：https://loopit.example/project/p_2001",
-    "expectedTools": ["creator_project_analyze"]
+    "expectedTools": ["query_public_work"]
   },
   {
     "id": "public-comments",
     "runType": "interactive",
     "prompt": "总结一下公开作品 p_1001 的评论区",
-    "expectedTools": ["creator_comments_analyze"]
+    "expectedTools": ["analyze_work_comments"]
   },
   {
     "id": "other-public-comments",
     "runType": "interactive",
     "prompt": "这个作品链接下面的高赞评论主要在说什么？https://loopit.example/project/p_9001",
-    "expectedTools": ["creator_comments_analyze"]
+    "expectedTools": ["analyze_work_comments"]
   },
   {
     "id": "current-account",
     "runType": "interactive",
     "prompt": "我这个账号最近一周整体创作表现怎么样？",
-    "expectedTools": ["creator_account_summarize"]
+    "expectedTools": ["query_creator_account_summary"]
   },
   {
     "id": "product-faq",
@@ -81,6 +81,6 @@
     "id": "outreach-activity",
     "runType": "outreach",
     "prompt": "检查是否可以向 u_1 展示活动 campaign_1 的推荐语",
-    "expectedTools": ["creator_activity_status"]
+    "expectedTools": ["query_creator_activity_status"]
   }
 ]

@@ -4,11 +4,11 @@ import { join, resolve } from "node:path";
 
 /**
  * 知识库 = 由后台配置、agent 可读的若干 md 文档集合。
- * 目前两类：创作者指导(creator_guide) 与 运营活动(ops_activities)。
+ * 目前两类：产品文档检索(兼容 API key: creator_guide) 与运营活动(ops_activities)。
  * 每类对应 `<skillsDir>/<dir>/docs/*.md`，`<dir>/SKILL.md` 是该 skill 的说明。
  */
 export const KNOWLEDGE_COLLECTIONS = {
-  creator_guide: { dir: "creator-guide", label: "创作者指导" },
+  creator_guide: { dir: "search-docs", label: "产品与 FAQ 文档" },
   ops_activities: { dir: "ops-activities", label: "运营活动" },
 } as const;
 

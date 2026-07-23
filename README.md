@@ -12,12 +12,13 @@
 - 远程业务 Skill 从 S3 物料化到会话目录，同样由 Pi 内置 `read` 工具只读加载。
 - 默认 Skill 及其 `docs/` 参考资料通过 Pi 内置 `read` 工具读取。
 - Loopit 业务数据通过 Streamable HTTP MCP 访问，不在本项目内实现数据查询逻辑。
-- Creator IM 只加载 `creator-analysis`、`creator-guide` 和 3 个目的互斥的数据业务工具。
+- Creator IM 加载 `analyze-project`、`summarize-comments`、`analyze-account`、`search-docs` 四个垂类 Skill，以及 3 个目的互斥的数据工具。
 - 平台侧 Outreach Profile 只加载 `ops-activities` 与活动状态工具，不与 Creator IM 共用工具。
 - `creator-inspiration` 作为未来候选保留，但 revision 4291 一期不加载。
 - 作品画像、消费、评论、Prompt 等原子查询保留在 MCP/数据层组合。
 - 作品工具在适配层统一解析 PID/分享链接；账号与活动 UID 由会话上下文注入，不接受模型参数覆盖。
-- 业务数据响应必须包含 `ok`，成功结果必须包含 `as_of`，否则按契约错误降级。
+- 业务数据对 Agent 统一为 `data / meta / error`；适配器兼容旧响应但暂不因缺少 `as_of` 强制失败。
+- 跨会话记忆分为明确偏好、最近公开作品引用和短期上下文；敏感信息与指令型内容不进入长期记忆。
 - 所有分析要求携带数据窗口或 `as_of`；Creator Score、Level、L2 等内部标签不向创作者展示。
 - `evals/tool-routing-cases.json` 固化典型场景、预期业务工具链和零工具问答，防止工具颗粒度回归。
 - 可选 Langfuse trace，记录模型、工具、Token 和费用信息。
@@ -103,3 +104,4 @@ pnpm start          # 运行构建产物
 - [`docs/AGENT-TOOL-DESIGN-RESEARCH.md`](docs/AGENT-TOOL-DESIGN-RESEARCH.md)
 - [`docs/RPD-REVISION-4291-DELTA.md`](docs/RPD-REVISION-4291-DELTA.md)
 - [`docs/ITERATION-BRIEF-4291-HARDENING.md`](docs/ITERATION-BRIEF-4291-HARDENING.md)
+- [`docs/ITERATION-BRIEF-V6-MEMORY-CONTRACT.md`](docs/ITERATION-BRIEF-V6-MEMORY-CONTRACT.md)

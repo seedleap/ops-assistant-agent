@@ -6,6 +6,7 @@ import type {
   AssistantRunRecord,
   ConversationRecord,
   ConversationSessionRecord,
+  CreatorMemoryRecord,
   ISODateString,
   MessageRecord,
   OutboxMessage,
@@ -13,6 +14,7 @@ import type {
   StoreState,
 } from "../../domain/types.js";
 import type { ConversationArchive } from "./conversation-archive.js";
+import { buildCreatorMemory } from "./creator-memory.js";
 
 const DEFAULT_THREAD_ID = "default";
 
@@ -27,6 +29,7 @@ function createId(prefix: string): string {
 function initialState(): StoreState {
   return {
     conversations: [],
+    creatorMemories: [],
     sessions: [],
     messages: [],
     schedules: [],
@@ -60,6 +63,7 @@ export class JsonStore {
     // 兼容旧版 MVP 的 state.json：首次启动时补齐 sessions，不丢历史消息。
     return new JsonStore(filePath, {
       conversations: parsed.conversations ?? [],
+      creatorMemories: parsed.creatorMemories ?? [],
       sessions: parsed.sessions ?? [],
       messages: parsed.messages ?? [],
       schedules: parsed.schedules ?? [],
@@ -83,6 +87,10 @@ export class JsonStore {
 
   getConversation(userId: string, imThreadId = DEFAULT_THREAD_ID): ConversationRecord | undefined {
     return this.state.conversations.find((c) => c.userId === userId && c.imThreadId === imThreadId);
+  }
+
+  getCreatorMemory(userId: string): CreatorMemoryRecord | undefined {
+    return this.state.creatorMemories.find((memory) => memory.userId === userId);
   }
 
   async ensureConversation(userId: string, imThreadId = DEFAULT_THREAD_ID): Promise<ConversationRecord> {
@@ -188,31 +196,44 @@ export class JsonStore {
     await this.save();
   }
 
-  buildRecoveryContext(userId: string, imThreadId: string, sessionId?: string, maxMessages = 12): string {
+  buildRecoveryContext(userId: string, imThreadId: string, sessionId?: string): string {
     const conversation = this.getConversation(userId, imThreadId);
     const session = sessionId ? this.getSession(sessionId) : undefined;
-    const messages = this.state.messages
-      .filter((message) => message.userId === userId && message.imThreadId === imThreadId)
-      .slice(-maxMessages);
+    const memory = this.getCreatorMemory(userId);
     const lines: string[] = [];
-    if (conversation?.summary) lines.push(`已有会话摘要：\n${conversation.summary}`);
-    if (session?.summary && session.summary !== conversation?.summary) lines.push(`上一段会话摘要：\n${session.summary}`);
-    if (messages.length > 0) {
-      lines.push(`最近消息：\n${messages.map((message) => `${message.role === "user" ? "用户" : "Agent"}: ${message.text}`).join("\n")}`);
+    if (memory && (memory.stablePreferences.length > 0 || memory.recentProjectRefs.length > 0)) {
+      lines.push(`<structured_memory>\n${JSON.stringify({
+        stable_preferences: memory.stablePreferences,
+        recent_project_refs: memory.recentProjectRefs,
+        updated_at: memory.updatedAt,
+      })}\n</structured_memory>`);
     }
-    return lines.join("\n\n").slice(0, 24_000);
+    const recentContext = conversation?.summary
+      || (session?.summary && session.summary !== conversation?.summary ? session.summary : "");
+    if (recentContext) lines.push(`<recent_context>\n${recentContext}\n</recent_context>`);
+    return lines.join("\n\n").slice(0, 12_000);
   }
 
   async updateConversationSummary(userId: string, imThreadId: string, sessionId?: string): Promise<void> {
     // 摘要只从最近可见消息重建，不能把旧 summary 再嵌套进去导致无限膨胀。
+    const allUserMessages = this.state.messages
+      .filter((message) => message.userId === userId && message.role === "user")
+      .slice(-50)
+      .map((message) => message.text);
     const recent = this.state.messages
       .filter((message) => message.userId === userId && message.imThreadId === imThreadId)
-      .slice(-8);
+      .slice(-6);
     const context = recent.length > 0
-      ? `最近消息：\n${recent.map((message) => `${message.role === "user" ? "用户" : "Agent"}: ${message.text}`).join("\n")}`
+      ? recent
+        .map((message) => `${message.role === "user" ? "用户" : "Agent"}: ${message.text.slice(0, 1_000)}`)
+        .join("\n")
       : "";
     const conversation = await this.ensureConversation(userId, imThreadId);
-    conversation.summary = context.slice(0, 8_000);
+    conversation.summary = context.slice(0, 6_000);
+    const memory = buildCreatorMemory(userId, allUserMessages, nowIso(), this.getCreatorMemory(userId));
+    const existingMemoryIndex = this.state.creatorMemories.findIndex((item) => item.userId === userId);
+    if (existingMemoryIndex >= 0) this.state.creatorMemories[existingMemoryIndex] = memory;
+    else this.state.creatorMemories.push(memory);
     conversation.updatedAt = nowIso();
     if (sessionId) await this.touchSession(sessionId, { summary: conversation.summary });
     else await this.save();
@@ -224,6 +245,20 @@ export class JsonStore {
     this.state.conversations.push(archive.conversation);
     this.state.sessions.push(...archive.sessions);
     this.state.messages.push(...archive.messages);
+    const archivedUserMessages = archive.messages
+      .filter((message) => message.role === "user")
+      .map((message) => message.text);
+    if (archivedUserMessages.length > 0) {
+      const memory = buildCreatorMemory(
+        archive.conversation.userId,
+        archivedUserMessages,
+        nowIso(),
+        this.getCreatorMemory(archive.conversation.userId),
+      );
+      const memoryIndex = this.state.creatorMemories.findIndex((item) => item.userId === memory.userId);
+      if (memoryIndex >= 0) this.state.creatorMemories[memoryIndex] = memory;
+      else this.state.creatorMemories.push(memory);
+    }
     await this.save();
   }
 

@@ -5,7 +5,7 @@ import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { selectSessionTools } from "./session.js";
 
 const customTool: ToolDefinition = {
-  name: "creator_project_analyze",
+  name: "query_public_work",
   label: "test",
   description: "test tool",
   parameters: Type.Object({}),
@@ -13,8 +13,8 @@ const customTool: ToolDefinition = {
 };
 
 test("session tool selection preserves Pi built-ins without treating them as custom tools", () => {
-  const selected = selectSessionTools(["read", "creator_project_analyze"], [customTool]);
-  assert.deepEqual(selected.toolNames, ["read", "creator_project_analyze"]);
+  const selected = selectSessionTools(["read", "query_public_work"], [customTool]);
+  assert.deepEqual(selected.toolNames, ["read", "query_public_work"]);
   assert.deepEqual(selected.customTools, [customTool]);
 });
 

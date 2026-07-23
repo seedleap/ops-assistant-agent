@@ -68,7 +68,7 @@ test("ops tools keep transport diagnostics out of model-facing errors", async ()
   assert.match(String(result.details.error), /private-token/);
 });
 
-test("revision 4291 business tools enforce public-project and fixed-window contracts", async () => {
+test("revision 4291 business tools map public-project and fixed-window contracts", async () => {
   const calls: Array<{ name: OpsMcpToolName; args: Record<string, unknown> }> = [];
   const client: OpsMcpToolCaller = {
     async callTool(name, args) {
@@ -77,20 +77,20 @@ test("revision 4291 business tools enforce public-project and fixed-window contr
     },
   };
 
-  await execute(createProjectAnalysisTool(client), {
-    pid: "https://loopit.example/project/p_public?from=share",
-    responseFormat: "concise",
+  const projectResult = await execute(createProjectAnalysisTool(client), {
+    project_ref: "https://loopit.example/project/p_public?from=share",
+    detail_level: "summary",
   });
-  await execute(createCommentAnalysisTool(client), { pid: "p_public", responseFormat: "detailed" });
+  await execute(createCommentAnalysisTool(client), { project_ref: "p_public", detail_level: "full" });
   const context = { creatorUid: "u_bound" };
   await execute(createCreatorAccountSummaryTool(client, context), {
     uid: "u_attacker",
-    responseFormat: "concise",
+    detail_level: "summary",
   });
   await execute(createCreatorActivityStatusTool(client, context), {
     uid: "u_attacker",
-    campaignId: "campaign_1",
-    includeProgress: true,
+    campaign_id: "campaign_1",
+    include_progress: true,
   });
 
   assert.deepEqual(calls, [
@@ -108,9 +108,13 @@ test("revision 4291 business tools enforce public-project and fixed-window contr
     },
     {
       name: "query_creator_activity_status",
-      args: { uid: "u_bound", campaignId: "campaign_1", includeProgress: true },
+      args: { uid: "u_bound", campaignId: "campaign_1", includeProgress: true, responseFormat: "concise" },
     },
   ]);
+  assert.deepEqual(JSON.parse(projectResult.content[0].text), {
+    data: {},
+    meta: { data_as_of: "2026-07-23T00:00:00+08:00" },
+  });
 });
 
 test("the Agent-facing catalog stays smaller than the MCP primitive layer", async () => {
@@ -125,11 +129,17 @@ test("the Agent-facing catalog stays smaller than the MCP primitive layer", asyn
   const primitiveTools = createDataPrimitiveTools(client);
   assert.deepEqual(agentTools.map((tool) => tool.name), CREATOR_SUPPORT_TOOL_NAMES);
   assert.deepEqual(agentTools.map((tool) => tool.name), [
-    "creator_project_analyze",
-    "creator_comments_analyze",
-    "creator_account_summarize",
-    "creator_activity_status",
+    "query_public_work",
+    "analyze_work_comments",
+    "query_creator_account_summary",
+    "query_creator_activity_status",
   ]);
+  const expectedInputs: Record<string, string[]> = {
+    query_public_work: ["detail_level", "project_ref"],
+    analyze_work_comments: ["detail_level", "project_ref"],
+    query_creator_account_summary: ["detail_level"],
+    query_creator_activity_status: ["campaign_id", "detail_level", "include_progress"],
+  };
   for (const tool of agentTools) {
     assert.ok(tool.description.length >= 80, `${tool.name} needs a decision-oriented description`);
     const schema = tool.parameters as unknown as {
@@ -137,7 +147,8 @@ test("the Agent-facing catalog stays smaller than the MCP primitive layer", asyn
       properties?: Record<string, unknown>;
     };
     assert.equal(schema.additionalProperties, false, `${tool.name} must reject unknown arguments`);
-    assert.ok(schema.properties?.responseFormat, `${tool.name} must support concise/detailed responses`);
+    assert.ok(schema.properties?.detail_level, `${tool.name} must support summary/full responses`);
+    assert.deepEqual(Object.keys(schema.properties ?? {}).sort(), expectedInputs[tool.name]);
   }
   assert.deepEqual(primitiveTools.map((tool) => tool.name), [
     "query_work_overview",
@@ -150,10 +161,10 @@ test("the Agent-facing catalog stays smaller than the MCP primitive layer", asyn
   assert.deepEqual(new Set(DATA_PRIMITIVE_TOOL_NAMES), new Set(primitiveTools.map((tool) => tool.name)));
   assert.equal(new Set(createOpsDataTools(client, context).map((tool) => tool.name)).size, 10);
   assert.deepEqual(CREATOR_SUPPORT_TOOL_BINDINGS, {
-    creator_project_analyze: "query_public_work",
-    creator_comments_analyze: "analyze_work_comments",
-    creator_account_summarize: "query_creator_account_summary",
-    creator_activity_status: "query_creator_activity_status",
+    query_public_work: "query_public_work",
+    analyze_work_comments: "analyze_work_comments",
+    query_creator_account_summary: "query_creator_account_summary",
+    query_creator_activity_status: "query_creator_activity_status",
   });
   assert.equal(OPS_MCP_TOOL_NAMES.includes("query_creator_inspiration_context" as never), false);
   assert.equal(OPS_MCP_TOOL_NAMES.includes("search_creation_catalog" as never), false);
@@ -167,13 +178,34 @@ test("public project references are normalized before MCP calls", async () => {
   assert.throws(() => resolvePublicProjectPid("not a pid or url"), /有效的公开作品/);
 });
 
-test("business tools reject successful responses without as_of", async () => {
+test("business tools normalize legacy responses without enforcing as_of", async () => {
   const client: OpsMcpToolCaller = {
     async callTool() {
       return { structuredContent: { ok: true } };
     },
   };
-  const result = await execute(createProjectAnalysisTool(client), { pid: "p_1" });
+  const result = await execute(createProjectAnalysisTool(client), { project_ref: "p_1" });
+  assert.equal(result.isError, false);
+  assert.deepEqual(JSON.parse(result.content[0].text), { data: {}, meta: {} });
+});
+
+test("business tool failures use the same data meta error envelope", async () => {
+  const client: OpsMcpToolCaller = {
+    async callTool() {
+      throw new Error("private transport detail");
+    },
+  };
+  const result = await execute(createProjectAnalysisTool(client), { project_ref: "p_1" });
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /缺少必要的 ok 或 as_of/);
+  assert.deepEqual(JSON.parse(result.content[0].text), {
+    data: null,
+    meta: {},
+    error: {
+      code: "service_unavailable",
+      message: "运营数据服务暂时不可用，请稍后重试。",
+      retryable: true,
+    },
+  });
+  assert.match(String(result.details.error), /private transport detail/);
+  assert.doesNotMatch(result.content[0].text, /private transport detail/);
 });

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Analyze Project"
+  short_description: "Analyze one public Loopit project from evidence"
+  default_prompt: "Use $analyze-project to analyze this public project and recommend one evidence-based next step."

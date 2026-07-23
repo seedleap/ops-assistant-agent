@@ -16,7 +16,7 @@ const PROFILE: AgentProfile = {
   id: "creator-chat",
   traceName: "ops-creator-chat",
   prompt: {
-    version: "creator-support-v5-rpd4291",
+    version: "creator-support-v6-memory",
     fileName: "creator-chat.md",
     file: "/tmp/creator-chat.md",
   },
@@ -32,7 +32,7 @@ const PROFILE: AgentProfile = {
     maxRetries: 2,
     compactionEnabled: true,
   },
-  toolNames: ["creator_project_analyze"],
+  toolNames: ["query_public_work"],
   runType: "interactive",
   skills: [],
 };
@@ -84,12 +84,12 @@ test("latest Pi resource loader keeps explicit inline extensions when discovery 
 test("Pi registers the standard SKILL.md directory in the system skill index", async () => {
   const dir = await mkdtemp(join(tmpdir(), "ops-pi-skill-"));
   try {
-    const skillDir = join(dir, "creator-guide");
+    const skillDir = join(dir, "search-docs");
     await mkdir(skillDir, { recursive: true });
-    await writeFile(join(skillDir, "SKILL.md"), "---\nname: creator-guide\ndescription: creator guidance\n---\n\n# Guide\n");
+    await writeFile(join(skillDir, "SKILL.md"), "---\nname: search-docs\ndescription: product guidance\n---\n\n# Guide\n");
     const result = loadSkillsFromDir({ dir, source: "workspace" });
     assert.equal(result.skills.length, 1);
-    assert.match(formatSkillsForPrompt(result.skills), /creator-guide/);
+    assert.match(formatSkillsForPrompt(result.skills), /search-docs/);
     assert.match(formatSkillsForPrompt(result.skills), /Use the read tool/);
   } finally {
     await rm(dir, { recursive: true, force: true });

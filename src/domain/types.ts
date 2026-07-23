@@ -13,6 +13,14 @@ export interface ConversationRecord {
   updatedAt: ISODateString;
 }
 
+export interface CreatorMemoryRecord {
+  userId: string;
+  schemaVersion: 1;
+  stablePreferences: string[];
+  recentProjectRefs: string[];
+  updatedAt: ISODateString;
+}
+
 export interface ConversationSessionRecord {
   id: string;
   userId: string;
@@ -82,6 +90,7 @@ export interface OutboxMessage {
 
 export interface StoreState {
   conversations: ConversationRecord[];
+  creatorMemories: CreatorMemoryRecord[];
   sessions: ConversationSessionRecord[];
   messages: MessageRecord[];
   schedules: ScheduleRecord[];

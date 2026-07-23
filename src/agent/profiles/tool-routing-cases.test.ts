@@ -49,11 +49,14 @@ test("routing cases cover every revision 4291 business tool", async () => {
 test("revision 4291 keeps future scenarios and activity state out of creator chat", () => {
   assert.deepEqual(CREATOR_CHAT_PROFILE.toolNames, [
     "read",
-    "creator_project_analyze",
-    "creator_comments_analyze",
-    "creator_account_summarize",
+    "query_public_work",
+    "analyze_work_comments",
+    "query_creator_account_summary",
   ]);
-  assert.deepEqual(CREATOR_OUTREACH_PROFILE.toolNames, ["read", "creator_activity_status"]);
+  assert.deepEqual(CREATOR_OUTREACH_PROFILE.toolNames, [
+    "read",
+    "query_creator_activity_status",
+  ]);
   const chatSkills = new Set<string>(CREATOR_CHAT_PROFILE.localSkills);
   assert.ok(!chatSkills.has("creator-inspiration"));
   assert.ok(!chatSkills.has("ops-activities"));

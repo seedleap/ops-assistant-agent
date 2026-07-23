@@ -31,27 +31,26 @@ test("each Agent Profile owns its prompt, tools and runtime policy", () => {
 
   const chat = resolveAgentProfileById(config, "creator-chat");
   assert.equal(chat.prompt.file, resolve("/tmp/ops-agent-prompts/creator-chat.md"));
-  assert.equal(chat.prompt.version, "creator-support-v5-rpd4291");
+  assert.equal(chat.prompt.version, "creator-support-v6-memory");
   assert.equal(chat.runtime.maxTurns, 12);
   assert.equal(chat.runtime.maxRetries, 2);
   assert.equal(chat.runtime.compactionEnabled, true);
-  assert.ok(chat.toolNames.includes("creator_project_analyze"));
-  assert.ok(!chat.toolNames.includes("creator_activity_status"));
-  assert.ok(!chat.toolNames.some((name) => name.startsWith("query_")));
+  assert.ok(chat.toolNames.includes("query_public_work"));
+  assert.ok(!chat.toolNames.includes("query_creator_activity_status"));
   assert.deepEqual(
     chat.toolNames.filter((name) => name !== "read"),
-    CREATOR_SUPPORT_TOOL_NAMES.filter((name) => name !== "creator_activity_status"),
+    CREATOR_SUPPORT_TOOL_NAMES.filter((name) => name !== "query_creator_activity_status"),
   );
   assert.equal(chat.toolNames.some((name) => DATA_PRIMITIVE_TOOL_NAMES.includes(name as never)), false);
-  assert.deepEqual(chat.localSkills, ["creator-analysis", "creator-guide"]);
+  assert.deepEqual(chat.localSkills, ["analyze-project", "summarize-comments", "analyze-account", "search-docs"]);
 
   const outreach = resolveAgentProfileById(config, "creator-outreach");
   assert.equal(outreach.prompt.file, resolve("/tmp/ops-agent-prompts/creator-outreach.md"));
-  assert.equal(outreach.prompt.version, "creator-outreach-v5-rpd4291");
+  assert.equal(outreach.prompt.version, "creator-outreach-v6-contract");
   assert.equal(outreach.runtime.timeoutMs, 45_000);
   assert.equal(outreach.runtime.compactionEnabled, false);
-  assert.ok(outreach.toolNames.includes("creator_activity_status"));
-  assert.deepEqual(outreach.toolNames, ["read", "creator_activity_status"]);
+  assert.ok(outreach.toolNames.includes("query_creator_activity_status"));
+  assert.deepEqual(outreach.toolNames, ["read", "query_creator_activity_status"]);
   assert.deepEqual(outreach.localSkills, ["ops-activities"]);
 });
 
