@@ -26,8 +26,8 @@ Langfuse observes the same Pi lifecycle:
 ```text
 Agent trace
   ├─ generation: turn-1
-  ├─ tool: query_creator_works
-  ├─ tool: query_work_overview
+  ├─ tool: creator_work_resolve
+  ├─ tool: creator_work_analyze
   ├─ generation: turn-2
   └─ final output / usage / status
 ```

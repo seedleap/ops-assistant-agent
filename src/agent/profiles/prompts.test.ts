@@ -34,6 +34,8 @@ test("creator chat prompt preserves evidence, safety and action contracts", asyn
   assert.match(prompt, /不根据作品数据自行推算/);
   assert.match(prompt, /Creator Score、Type、Path、Level、Age、Barrier、L2/);
   assert.match(prompt, /引用数据时说明 `as_of` 或时间范围/);
+  assert.match(prompt, /默认使用 `responseFormat=concise`/);
+  assert.match(prompt, /不要为了“更完整”并行调用语义重叠的工具/);
 });
 
 test("creator outreach prompt preserves value gate and no-send contract", async () => {
@@ -50,4 +52,6 @@ test("creator outreach prompt preserves value gate and no-send contract", async 
   assert.match(prompt, /运营人群标签和目录搜索结果都不等于资格/);
   assert.match(prompt, /活动有效、资格已确认、年龄路线允许、官方 action 可用/);
   assert.match(prompt, /Creator Score、Type、Path、Level、Age、Barrier、L2/);
+  assert.match(prompt, /只调用完成当前触达判断所需的最少业务工具/);
+  assert.match(prompt, /活动状态工具为最终权威依据/);
 });

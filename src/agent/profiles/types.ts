@@ -1,10 +1,10 @@
-import type { OpsMcpToolName } from "../../integrations/loopit/mcp-client.js";
+import type { CreatorSupportToolName } from "../../integrations/loopit/tool-catalog.js";
 import type { RemoteSkillRef } from "../../integrations/skills/types.js";
 
 export type AgentRunType = "interactive" | "outreach";
 export type AgentThinkingLevel = "off" | "minimal" | "low" | "medium" | "high";
 /** Pi 内置只读工具；远程 Skill 物料化到会话目录后由它读取。 */
-export type AgentToolName = OpsMcpToolName | "read";
+export type AgentToolName = CreatorSupportToolName | "read";
 
 export interface AgentModelConfig {
   provider: string;

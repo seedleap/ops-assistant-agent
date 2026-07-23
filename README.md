@@ -13,8 +13,9 @@
 - 默认 Skill 及其 `docs/` 参考资料通过 Pi 内置 `read` 工具读取。
 - Loopit 业务数据通过 Streamable HTTP MCP 访问，不在本项目内实现数据查询逻辑。
 - `creator-analysis`、`creator-inspiration`、`creator-guide`、`ops-activities` 四个默认 Skill 按场景加载。
-- 本人作品分析、评论聚类、账号总览、公开作品学习、灵感检索和活动状态使用独立只读工具契约。
+- 主 Agent 只加载 8 个目的互斥的业务工具；作品画像、消费、评论、Prompt 等原子查询保留在 MCP/数据层组合。
 - 所有分析要求携带数据窗口或 `as_of`；Creator Score、Level、L2 等内部标签不向创作者展示。
+- `evals/tool-routing-cases.json` 固化典型场景、预期业务工具链和零工具问答，防止工具颗粒度回归。
 - 可选 Langfuse trace，记录模型、工具、Token 和费用信息。
 
 ## 快速启动
@@ -95,3 +96,4 @@ pnpm start          # 运行构建产物
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - [`docs/CREATOR-OPERATIONS-CONTEXT.md`](docs/CREATOR-OPERATIONS-CONTEXT.md)
 - [`docs/CREATOR-SUPPORT-ARCHITECTURE.md`](docs/CREATOR-SUPPORT-ARCHITECTURE.md)
+- [`docs/AGENT-TOOL-DESIGN-RESEARCH.md`](docs/AGENT-TOOL-DESIGN-RESEARCH.md)
