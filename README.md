@@ -16,6 +16,8 @@
 - 平台侧 Outreach Profile 只加载 `ops-activities` 与活动状态工具，不与 Creator IM 共用工具。
 - `creator-inspiration` 作为未来候选保留，但 revision 4291 一期不加载。
 - 作品画像、消费、评论、Prompt 等原子查询保留在 MCP/数据层组合。
+- 作品工具在适配层统一解析 PID/分享链接；账号与活动 UID 由会话上下文注入，不接受模型参数覆盖。
+- 业务数据响应必须包含 `ok`，成功结果必须包含 `as_of`，否则按契约错误降级。
 - 所有分析要求携带数据窗口或 `as_of`；Creator Score、Level、L2 等内部标签不向创作者展示。
 - `evals/tool-routing-cases.json` 固化典型场景、预期业务工具链和零工具问答，防止工具颗粒度回归。
 - 可选 Langfuse trace，记录模型、工具、Token 和费用信息。
@@ -100,3 +102,4 @@ pnpm start          # 运行构建产物
 - [`docs/CREATOR-SUPPORT-ARCHITECTURE.md`](docs/CREATOR-SUPPORT-ARCHITECTURE.md)
 - [`docs/AGENT-TOOL-DESIGN-RESEARCH.md`](docs/AGENT-TOOL-DESIGN-RESEARCH.md)
 - [`docs/RPD-REVISION-4291-DELTA.md`](docs/RPD-REVISION-4291-DELTA.md)
+- [`docs/ITERATION-BRIEF-4291-HARDENING.md`](docs/ITERATION-BRIEF-4291-HARDENING.md)

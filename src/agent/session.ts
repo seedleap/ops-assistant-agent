@@ -27,9 +27,31 @@ export interface OpsSessionHandle {
   modelName: string;
 }
 
+const BUILTIN_TOOL_NAMES = new Set(["read"]);
+
+export interface SelectedSessionTools {
+  toolNames: string[];
+  customTools: ToolDefinition[];
+}
+
+export function selectSessionTools(
+  names: readonly string[],
+  definitions: readonly ToolDefinition[],
+): SelectedSessionTools {
+  if (new Set(names).size !== names.length) throw new Error("Agent profile contains duplicate tool names");
+  const byName = new Map(definitions.map((tool) => [tool.name, tool]));
+  const customTools: ToolDefinition[] = [];
+  for (const name of names) {
+    if (BUILTIN_TOOL_NAMES.has(name)) continue;
+    const tool = byName.get(name);
+    if (!tool) throw new Error(`Agent profile references unknown tool: ${name}`);
+    customTools.push(tool);
+  }
+  return { toolNames: [...names], customTools };
+}
+
 export class OpsSessionFactory {
   private modelsPromise?: Promise<OpsModelRegistry>;
-  private readonly tools: ToolDefinition[];
   private readonly opsMcp: RemoteOpsMcpClient;
   private readonly remoteSkills: RemoteSkillStore;
 
@@ -45,9 +67,6 @@ export class OpsSessionFactory {
       timeoutMs: 120_000,
       maxBytes: 20 * 1024 * 1024,
     });
-    this.tools = [
-      ...createOpsDataTools(this.opsMcp),
-    ];
   }
 
   close(): Promise<void> {
@@ -99,7 +118,11 @@ export class OpsSessionFactory {
     const sessionManager = input.continueSession && existsSync(input.sessionDir)
       ? SessionManager.continueRecent(input.workDir, input.sessionDir)
       : SessionManager.create(input.workDir, input.sessionDir);
-    const customTools = this.selectTools(profile.toolNames);
+    const creatorUid = input.creatorUid?.trim() || input.userId;
+    const selectedTools = selectSessionTools(
+      profile.toolNames,
+      createOpsDataTools(this.opsMcp, { creatorUid }),
+    );
     const { session } = await createAgentSession({
       cwd: input.workDir,
       agentDir: this.config.dataDir,
@@ -108,8 +131,8 @@ export class OpsSessionFactory {
       model,
       thinkingLevel: profile.model.thinkingLevel,
       resourceLoader,
-      tools: customTools.map((tool) => tool.name),
-      customTools,
+      tools: selectedTools.toolNames,
+      customTools: selectedTools.customTools,
       sessionManager,
       settingsManager,
     });
@@ -120,15 +143,6 @@ export class OpsSessionFactory {
   private models(): Promise<OpsModelRegistry> {
     this.modelsPromise ||= OpsModelRegistry.create(this.config);
     return this.modelsPromise;
-  }
-
-  private selectTools(names: readonly string[]): ToolDefinition[] {
-    const byName = new Map(this.tools.map((tool) => [tool.name, tool]));
-    return names.map((name) => {
-      const tool = byName.get(name);
-      if (!tool) throw new Error(`Agent profile references unknown tool: ${name}`);
-      return tool;
-    });
   }
 
   private async systemPrompt(profile: AgentProfile): Promise<string> {

@@ -11,6 +11,7 @@ import {
   createOpsDataTools,
   createProjectAnalysisTool,
   createWorkOverviewTool,
+  resolvePublicProjectPid,
 } from "./data-tools.js";
 import { OPS_MCP_TOOL_NAMES, type OpsMcpToolCaller, type OpsMcpToolName } from "./mcp-client.js";
 import {
@@ -76,11 +77,18 @@ test("revision 4291 business tools enforce public-project and fixed-window contr
     },
   };
 
-  await execute(createProjectAnalysisTool(client), { pid: "p_public", responseFormat: "concise" });
+  await execute(createProjectAnalysisTool(client), {
+    pid: "https://loopit.example/project/p_public?from=share",
+    responseFormat: "concise",
+  });
   await execute(createCommentAnalysisTool(client), { pid: "p_public", responseFormat: "detailed" });
-  await execute(createCreatorAccountSummaryTool(client), { uid: "u_1", responseFormat: "concise" });
-  await execute(createCreatorActivityStatusTool(client), {
-    uid: "u_1",
+  const context = { creatorUid: "u_bound" };
+  await execute(createCreatorAccountSummaryTool(client, context), {
+    uid: "u_attacker",
+    responseFormat: "concise",
+  });
+  await execute(createCreatorActivityStatusTool(client, context), {
+    uid: "u_attacker",
     campaignId: "campaign_1",
     includeProgress: true,
   });
@@ -96,11 +104,11 @@ test("revision 4291 business tools enforce public-project and fixed-window contr
     },
     {
       name: "query_creator_account_summary",
-      args: { uid: "u_1", responseFormat: "concise", days: 7, topWorksLimit: 3, publishedWithinDays: 180 },
+      args: { uid: "u_bound", responseFormat: "concise", days: 7, topWorksLimit: 3, publishedWithinDays: 180 },
     },
     {
       name: "query_creator_activity_status",
-      args: { uid: "u_1", campaignId: "campaign_1", includeProgress: true },
+      args: { uid: "u_bound", campaignId: "campaign_1", includeProgress: true },
     },
   ]);
 });
@@ -112,7 +120,8 @@ test("the Agent-facing catalog stays smaller than the MCP primitive layer", asyn
     },
   };
 
-  const agentTools = createCreatorSupportTools(client);
+  const context = { creatorUid: "u_bound" };
+  const agentTools = createCreatorSupportTools(client, context);
   const primitiveTools = createDataPrimitiveTools(client);
   assert.deepEqual(agentTools.map((tool) => tool.name), CREATOR_SUPPORT_TOOL_NAMES);
   assert.deepEqual(agentTools.map((tool) => tool.name), [
@@ -139,7 +148,7 @@ test("the Agent-facing catalog stays smaller than the MCP primitive layer", asyn
     "query_work_prompt",
   ]);
   assert.deepEqual(new Set(DATA_PRIMITIVE_TOOL_NAMES), new Set(primitiveTools.map((tool) => tool.name)));
-  assert.equal(new Set(createOpsDataTools(client).map((tool) => tool.name)).size, 10);
+  assert.equal(new Set(createOpsDataTools(client, context).map((tool) => tool.name)).size, 10);
   assert.deepEqual(CREATOR_SUPPORT_TOOL_BINDINGS, {
     creator_project_analyze: "query_public_work",
     creator_comments_analyze: "analyze_work_comments",
@@ -148,4 +157,23 @@ test("the Agent-facing catalog stays smaller than the MCP primitive layer", asyn
   });
   assert.equal(OPS_MCP_TOOL_NAMES.includes("query_creator_inspiration_context" as never), false);
   assert.equal(OPS_MCP_TOOL_NAMES.includes("search_creation_catalog" as never), false);
+});
+
+test("public project references are normalized before MCP calls", async () => {
+  assert.equal(resolvePublicProjectPid("p_1001"), "p_1001");
+  assert.equal(resolvePublicProjectPid("https://loopit.example/project/p_2001?from=share"), "p_2001");
+  assert.equal(resolvePublicProjectPid("https://loopit.example/play?pid=p_3001"), "p_3001");
+  assert.throws(() => resolvePublicProjectPid("https://loopit.example/project/"), /无法从链接中识别/);
+  assert.throws(() => resolvePublicProjectPid("not a pid or url"), /有效的公开作品/);
+});
+
+test("business tools reject successful responses without as_of", async () => {
+  const client: OpsMcpToolCaller = {
+    async callTool() {
+      return { structuredContent: { ok: true } };
+    },
+  };
+  const result = await execute(createProjectAnalysisTool(client), { pid: "p_1" });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /缺少必要的 ok 或 as_of/);
 });
