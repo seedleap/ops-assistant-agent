@@ -36,7 +36,7 @@ test("tool-routing eval cases stay inside the business-tool boundary", async () 
   }
 });
 
-test("routing cases cover every interactive business tool", async () => {
+test("routing cases cover every revision 4291 business tool", async () => {
   const raw = await readFile(join(process.cwd(), "evals", "tool-routing-cases.json"), "utf8");
   const cases = JSON.parse(raw) as ToolRoutingCase[];
   const covered = new Set(cases.flatMap((item) => item.expectedTools));
@@ -44,4 +44,17 @@ test("routing cases cover every interactive business tool", async () => {
     CREATOR_SUPPORT_TOOL_NAMES.filter((name) => !covered.has(name)),
     [],
   );
+});
+
+test("revision 4291 keeps future scenarios and activity state out of creator chat", () => {
+  assert.deepEqual(CREATOR_CHAT_PROFILE.toolNames, [
+    "read",
+    "creator_project_analyze",
+    "creator_comments_analyze",
+    "creator_account_summarize",
+  ]);
+  assert.deepEqual(CREATOR_OUTREACH_PROFILE.toolNames, ["read", "creator_activity_status"]);
+  const chatSkills = new Set<string>(CREATOR_CHAT_PROFILE.localSkills);
+  assert.ok(!chatSkills.has("creator-inspiration"));
+  assert.ok(!chatSkills.has("ops-activities"));
 });

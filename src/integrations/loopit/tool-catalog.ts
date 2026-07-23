@@ -6,13 +6,9 @@ import type { OpsMcpToolName } from "./mcp-client.js";
  * compose or reuse lower-level query operations behind that stable contract.
  */
 export const CREATOR_SUPPORT_TOOL_BINDINGS = {
-  creator_work_resolve: "query_creator_works",
-  creator_work_analyze: "query_work_analysis",
+  creator_project_analyze: "query_public_work",
   creator_comments_analyze: "analyze_work_comments",
-  creator_public_work_inspect: "query_public_work",
   creator_account_summarize: "query_creator_account_summary",
-  creator_inspiration_context: "query_creator_inspiration_context",
-  creator_catalog_search: "search_creation_catalog",
   creator_activity_status: "query_creator_activity_status",
 } as const satisfies Record<string, OpsMcpToolName>;
 

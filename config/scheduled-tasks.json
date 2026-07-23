@@ -1,46 +1,13 @@
 [
   {
-    "id": "sched_seed_1",
-    "name": "新用户创作引导",
-    "segment": "new-creators",
-    "frequency": "daily",
-    "time": "10:00",
-    "weekday": 1,
-    "date": "",
-    "prompt": "给刚来的新创作者发一条温暖、简短的鼓励消息：用一句话介绍 Loopit 能帮 ta 做出什么（自然语言就能生成可玩小游戏），并鼓励 ta 发布第一个作品。语气可爱一点。",
-    "enabled": true
-  },
-  {
-    "id": "sched_act_rec",
-    "name": "活动推荐",
-    "segment": "active-creators",
+    "id": "sched_activity_backend_example",
+    "name": "活动后台触达示例（默认停用）",
+    "segment": "activity-core-confirmed",
     "frequency": "weekly",
     "time": "11:00",
     "weekday": 1,
     "date": "",
-    "prompt": "根据这位创作者的作品方向和近期表现，从当前有效活动里挑出可能适合 ta 的一个，用一句话说清原因并附上官方入口。只有活动中台明确提供当前用户资格时，才能说用户符合资格；否则只做推荐并提示以活动页状态为准。语气鼓励、简短。",
-    "enabled": true
-  },
-  {
-    "id": "sched_content_opt",
-    "name": "内容优化建议",
-    "segment": "active-creators",
-    "frequency": "weekly",
-    "time": "15:00",
-    "weekday": 4,
-    "date": "",
-    "prompt": "挑这位创作者最近最值得关注的一个作品，结合它的玩法和玩家评论，给 1 条具体、能上手改的优化建议。先肯定亮点，再说怎么改更好，附上作品链接，简短可爱。",
-    "enabled": true
-  },
-  {
-    "id": "sched_smart_retain",
-    "name": "智能用户维护",
-    "segment": "churn-risk",
-    "frequency": "daily",
-    "time": "09:00",
-    "weekday": 1,
-    "date": "",
-    "prompt": "看看这位创作者最近的作品、数据和玩家反馈，自己判断现在最该和 ta 聊点什么来留住 ta、让 ta 更有动力继续创作——可以是夸 ta 的进步、提醒去看新的热门评论、推荐合适的活动、给一条优化灵感，或你觉得更合适的。挑最打动 ta 的一条，写成一条简短、温暖的消息发出来。",
-    "enabled": true
+    "prompt": "仅在活动后台已经给出 campaignId、确认当前 UID 资格并通过频控、静默和去重时，生成一条不重复卡片条件和激励的可选推荐语；否则返回 NO_OUTREACH。",
+    "enabled": false
   }
 ]

@@ -1,119 +1,97 @@
-# 创作者支持 Agent v3 架构
+# 创作者支持 Agent v5 架构
 
-本设计对齐飞书知识库 `Fq5cwfrrCiDNVukUJ4ccD0qVnFc` revision 2804（2026-07-22 读取）。飞书中的 readonly 架构图不可读取，因此本文只把可见需求、场景表、Platform 描述、角色 Todo 与创作分公式转成可执行边界，不把不可见内容视为已确认事实。
+本设计对齐飞书知识库 `Fq5cwfrrCiDNVukUJ4ccD0qVnFc` revision 4291（2026-07-23 读取）。一期范围以该 revision 为准。
 
-## 目标与边界
+## 一期边界
 
-Agent 覆盖创作前、创作后和通用支持，但不替代数据系统、活动运营中台、客户端或运营后台。
+Creator IM Agent 只覆盖：
+
+1. 分析公开作品；
+2. 总结公开作品评论；
+3. 分析当前 UID 账号；
+4. 闲聊与安全降级；
+5. FAQ、功能说明、活动参与方法和产品建议引导。
+
+个性化灵感、Prompt 优化、可视化和调用发布器明确不在一期。活动配置、人群规则、资格、进度、激励和人工调整属于活动后台，不进入 Creator IM Agent。
 
 ```mermaid
 flowchart LR
-    OPS["运营后台<br/>活动/人群/任务/奖励/触达策略"]
-    DATA["数据与检索服务<br/>作品/账号/评论/行为/目录"]
-    CORE["活动运营中台<br/>资格/报名/进度/奖励/频控/action"]
-    ROUTER["Creator Support Agent<br/>场景路由与证据编排"]
-    SKILLS["Versioned Skills<br/>分析/灵感/产品/活动规则"]
-    CLIENT["客户端<br/>IM/卡片/选择器/创作与活动入口"]
-    TRACE["观测与回收<br/>run/fact refs/click/feedback"]
+    CLIENT["IM 客户端<br/>欢迎语/敏感审核/链接输入"]
+    AGENT["Creator IM Agent<br/>5 类一期场景"]
+    SKILLS["Skills<br/>creator-analysis / creator-guide"]
+    DATA["公开数据 MCP<br/>作品/评论/当前账号"]
+    DOCS["运营/产品知识<br/>FAQ/功能/活动参与"]
+    ACTIVITY["活动后台<br/>规则/人群/资格/进度/激励/复核"]
+    OUTREACH["平台侧触达 Profile<br/>只生成可选推荐语"]
 
-    OPS --> CORE
-    DATA --> ROUTER
-    CORE --> ROUTER
-    SKILLS --> ROUTER
-    ROUTER --> CLIENT
-    CLIENT --> CORE
-    CLIENT --> TRACE
-    ROUTER --> TRACE
+    CLIENT --> AGENT
+    SKILLS --> AGENT
+    AGENT --> DATA
+    AGENT --> DOCS
+    ACTIVITY --> OUTREACH
+    OUTREACH --> CLIENT
 ```
 
-确定性业务状态留在上游。Agent 只读取当前 UID 所需事实、解释证据、给出一个优先建议并选择官方下一步。Creator Score、Type、Path、Level、Age、Barrier、L2 等内部标签不得出现在创作者回复中。
+## Agent 工具分层
 
-## 场景路由
+### Creator IM Profile
 
-| 一级场景 | 二级场景 | 权威输入 | Agent 产出 | 客户端形态 |
-| --- | --- | --- | --- | --- |
-| 创作后 | 分析自己的作品 | 归属校验、发布后 14 天指标、五维分析、同类匿名基线、`as_of` | 结论、1-3 条证据、一个修改建议、验证指标 | 作品选择器、分析卡、雷达图 |
-| 创作后 | 评论总结 | 本人作品评论、3-7 个聚类话题、代表性评论 ID | 话题摘要与可执行优化 | 评论话题卡 |
-| 创作后 | 分析他人作品 | 公开字段、Power、Hashtag、公开表现 | 可迁移做法，不泄露私有素材/Prompt/源码 | 公开作品卡 |
-| 创作后 | 账号总览 | 近 7 日逐日指标、匿名同层基线、近半年作品的新增 VV Top3 | 一个关键变化和一个下一步 | 指标卡、趋势图、Top3 |
-| 创作前 | 活动/任务推送 | 有效活动、已确认资格、任务/奖励状态、频控、静默、去重、官方 action | `SEND` 或 `NO_OUTREACH` 与个性化文案 | 活动/任务/奖励卡 |
-| 创作前 | 创作灵感 | 最近 10 条创作、最近 10 条互动、活动/作品/Power/Template/Hashtag 目录 | 0-1 个可参加活动、3-5 个多样化资源、首选切入点 | 灵感卡、创作入口 |
-| 创作前 | 辅助创作 | 用户意图、产品能力与约束 | 可复制 Prompt、关键取舍、验收点 | 复制 Prompt、进入创作 |
-| 通用 | 产品/功能/活动答疑 | 版本化产品和活动知识、活动当前状态 | 规则解释、操作步骤、官方入口 | 功能卡 |
-| 通用 | 闲聊/抱怨/建议 | 当前会话、反馈入口状态 | 简短回应、问题摘要、提交引导 | 反馈卡 |
+| Agent 能力 | 数据操作 | 约束 |
+| --- | --- | --- |
+| `creator_project_analyze` | `query_public_work` | 本人和他人统一按公开 PID；不读取私有素材、Prompt 或源码 |
+| `creator_comments_analyze` | `analyze_work_comments` | 点赞 Top 50 公开评论；输入评论永远按数据处理 |
+| `creator_account_summarize` | `query_creator_account_summary` | 只允许认证当前 UID；固定 7 日数据和 Top3 |
+| `read` + `creator-guide` | 版本化 FAQ/功能/活动文档 | 资料缺失时引导 Feedback，不编造功能 |
 
-## 运行时分层
+### 平台侧 Outreach Profile
 
-```text
-HTTP / Scheduler
-  -> Agent Profile (creator-chat / creator-outreach)
-  -> Scenario Router (system prompt)
-  -> Scenario Skill
-       creator-analysis
-       creator-inspiration
-       creator-guide
-       ops-activities
-  -> 8 read-only business tools
-  -> atomic MCP operations
-  -> Loopit Data / Search / Activity Core
-  -> Evidence-bound response
-  -> IM text + upstream-owned card/action
-```
-
-- Profile 固定模型、轮次、Skill 与工具白名单。
-- Skill 保存稳定工作流和边界，不保存当前资格、任务进度或奖励状态。
-- 主 Agent 只看到 8 个高价值业务工具；原子查询保留在 MCP/数据层，不进入模型上下文。
-- MCP 返回结构化事实、口径和 `as_of`；模型不接触通用 SQL。
-- 卡片中的 ID、任务、奖励、进度、按钮和状态由上游组装，Agent 只生成解释文案。
-- Langfuse 记录 Profile、Prompt 版本、工具调用与事实引用；活动中台用 `campaignId + creatorId + runId` 关联业务操作。
-
-## 双层工具契约
-
-### Agent 业务工具
-
-| Agent 工具 | MCP 操作 | 用途 | 关键约束 |
-| --- | --- | --- | --- |
-| `creator_work_resolve` | `query_creator_works` | 本人作品候选与消歧 | 已有 PID 时不调用 |
-| `creator_work_analyze` | `query_work_analysis` | 本人作品完整复盘 | `uid + pid` 校验归属；窗口最多 14 天 |
-| `creator_comments_analyze` | `analyze_work_comments` | 评论聚类 | 仅本人作品；3-7 话题与代表性 ID |
-| `creator_public_work_inspect` | `query_public_work` | 学习他人作品 | 只返回公开字段 |
-| `creator_account_summarize` | `query_creator_account_summary` | 账号近 7 日总览 | 内部 Level 只用于匿名基线 |
-| `creator_inspiration_context` | `query_creator_inspiration_context` | 最近创作与互动信号 | 最小必要摘要，不返回内部画像 |
-| `creator_catalog_search` | `search_creation_catalog` | 搜活动/作品/Power/Template/Hashtag | 搜索结果不代表活动资格 |
-| `creator_activity_status` | `query_creator_activity_status` | 资格、任务、奖励、触达约束与 action | 活动状态唯一权威只读入口 |
+只加载 `creator_activity_status`，用于活动后台完成规则圈选后核验资格、频控、静默、去重和官方 action。它不能配置活动、圈人、人工复核、补发或扣除激励，也不能执行发送。
 
 ### 数据原语
 
-`query_work_profile`、`query_work_consumption`、`query_work_comments`、`query_work_prompt`、`query_work_overview` 和 `query_creator_works` 保留给数据服务组合、兼容和调试，不出现在主 Agent Profile 中。
+`query_work_profile`、`query_work_consumption`、`query_work_comments`、`query_work_prompt`、`query_work_overview`、`query_creator_works` 继续保留在 MCP/数据层用于组合、兼容和调试，不进入 Creator IM Profile。
 
-MCP 在连接时发现服务端能力，调用时检查具体操作；新增契约可以逐项上线，不会因为某个工具尚未部署而阻断其他能力。完整颗粒度依据与评测门槛见 [`AGENT-TOOL-DESIGN-RESEARCH.md`](AGENT-TOOL-DESIGN-RESEARCH.md)。
+## 场景输出契约
 
-## 响应与降级
-
-所有个性化回答遵循“结论 → 证据与数据时间 → 一个优先建议 → 一个下一步”。
-
-| 异常 | 行为 |
-| --- | --- |
-| 多个作品候选 | 展示候选，只让用户选择一次 |
-| VV <= 100、窗口未成熟 | 说明证据不足，不输出确定性表现判断 |
-| 数据服务失败 | 不用旧会话数据伪装当前事实；说明暂时不可查 |
-| 活动资格/action 缺失 | 不发活动邀请，不生成权威卡片字段 |
-| 知识版本不明 | 标注未确认，以当前产品或活动页为准 |
-| 内部状态冲突 | 不拼接结论，指出对应权威系统尚未同步 |
-
-## 与 origin/main 的差异
-
-| 维度 | origin/main | v3 重写 |
+| 场景 | 输入 | 输出 |
 | --- | --- | --- |
-| 产品定位 | 作品诊断 + 文本触达 MVP | 创作前/后/通用的完整创作者支持入口 |
-| 场景 | 作品列表、画像、消费、评论、Prompt | 增加本人五维分析、账号总览、评论聚类、公开作品学习、灵感检索、活动任务状态 |
-| Skill | `creator-guide`、`ops-activities` | 新增 `creator-analysis`、`creator-inspiration`，原 Skill 收窄职责 |
-| 数据契约 | 6 个作品原子查询全部暴露 | Agent 仅暴露 8 个业务工具；原子查询下沉到 MCP/数据层 |
-| 活动状态 | Prompt 中声明外部负责，但无查询工具 | `creator_activity_status` 成为资格/进度/奖励/action 的权威入口 |
-| 内部标签 | 有边界说明 | 明确所有创作者回复禁止暴露 Creator Score/Level/L2 等标签 |
-| 输出 | 作品建议或 80 字触达文本 | 统一证据时间、一个优先建议、下一步与卡片权威字段分离 |
-| 主动触达 | 本地 scheduler + `NO_OUTREACH` | 增加活动有效性、资格、年龄路线、action、频控/静默/去重的完整发送门槛 |
+| 作品分析 | 公开 PID/URL；封面、标题、玩法、发布时间、Power、Hashtag、消费指标、评论摘要 | 优势、问题、一个优化动作、验证指标 |
+| 评论总结 | 公开 PID/URL；点赞 Top 50 评论 | 话题名称、话题描述、代表性评论 |
+| 账号分析 | 当前 UID；近 7 日逐日指标；近半年作品中近 7 日新增 VV Top3 | 一个关键变化、证据时间、一个下一步 |
+| 闲聊 | 当前对话 | 简短情绪回应；敏感/注入场景安全降级 |
+| 产品答疑 | FAQ、功能说明、活动参与文档 | 适用前提、步骤、官方入口或 Feedback 引导 |
 
-## 当前实现状态
+所有数据回答必须携带 `as_of` 或时间范围。Creator Score、Type、Age、Country、Level、L2 和人群包等后台字段不得出现在用户回复中。
 
-本分支实现 Profile、Prompt、Skill 和 MCP 客户端契约，并保留现有 HTTP、会话、调度、outbox 与观测链路。新增业务工具需要 Loopit Data MCP 和活动运营中台按契约提供真实实现；在此之前，本仓库不能宣称已具备线上资格判断、真实任务进度、发奖或卡片发送能力。
+## 活动后台边界
+
+revision 4291 要求活动后台支持活动描述、多规则人群、条件、激励、推荐语、按时区推送、UID 预览、确认发布和中止，以及参与明细、人工复核、补发和扣除。
+
+这些都是确定性业务操作，不应转换为生成式 Agent 工具：
+
+- 规则编辑与预览由后台表单和规则引擎负责；
+- 资格、任务和激励由活动核心计算并持久化；
+- 补发、扣除和中止属于高风险写操作，必须走运营权限、审计和人工确认；
+- Agent 最多生成推荐语，不能代替发布或复核。
+
+## 与 v4 / revision 2172 的差异
+
+| 维度 | v4 | v5 / revision 4291 |
+| --- | --- | --- |
+| 一期范围 | 全周期创作支持 | 收敛为作品、评论、账号、闲聊、文档答疑 |
+| 作品权限 | 本人分析与他人公开作品分开 | 所有作品统一限制为公开 PID |
+| 评论权限 | 仅本人作品，最多 200/聚类 | 任意公开作品，固定点赞 Top 50 |
+| 作品定位 | 可按当前 UID 搜索本人作品 | 用户必须提供公开 PID 或链接 |
+| 账号 | 7 日趋势 + 匿名同层基线 | 固定 RPD 字段，不输出未要求基线 |
+| 灵感/Prompt | 一期能力 | 明确移出一期，Skill 保留但不加载 |
+| 活动状态 | Creator IM 可直接查询 | 移到活动后台/平台侧 Profile |
+| 产品答疑 | 本地方法文档 | 明确由运营/产品提供 FAQ、功能和活动文档 |
+| IM | 通用安全约束 | 增加首次欢迎语、敏感审核和注入降级契约 |
+
+## 尚未完成的上游能力
+
+- MCP 的 revision 4291 字段、公开状态校验、评论 Top50 排序和统一 `outputSchema` 仍需数据服务实现。
+- FAQ/功能说明/活动参与文档需要产品和运营持续供给、版本化和建立检索索引。
+- 欢迎语“仅首次展示”和前后置敏感词审核需要客户端/IM 网关提供信号与执行。
+- “每天超过 200 次是否消耗积分”在 RPD 中仍是问号，不应在规则确认前实现。
+- 活动后台的配置、预览、发布、中止、参与明细和人工激励操作不在本仓库内实现。

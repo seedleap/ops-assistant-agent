@@ -91,7 +91,7 @@ export class OpsAssistant {
       : "";
     const uid = input.creatorUid?.trim();
     const creator = uid
-      ? `（背景信息，不用复述：当前创作者的 UID 是 ${uid}。当 ta 说“我的作品/我的游戏”等但没给出具体作品链接或 PID 时，用 creator_work_resolve 定位这个 UID 名下的作品。）\n\n`
+      ? `（背景信息，不用复述：当前创作者的 UID 是 ${uid}。账号分析只能使用这个已认证 UID；作品和评论分析需要用户提供公开作品链接或 PID。）\n\n`
       : "";
     return `${recovery}${creator}${input.prompt}`;
   }

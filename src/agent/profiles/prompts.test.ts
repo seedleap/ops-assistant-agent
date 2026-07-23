@@ -12,7 +12,7 @@ test("every Agent Profile points to a non-empty scenario prompt", async () => {
   for (const [id, profile] of Object.entries(AGENT_PROFILES)) {
     const prompt = await readProfilePrompt(profile.prompt.fileName);
     assert.ok(prompt.trim().length > 500, `${id} prompt is unexpectedly short`);
-    assert.match(prompt, /Instruction boundary/);
+    assert.match(prompt, /提示词|Instruction/);
     assert.match(prompt, /未满 13 岁/);
     assert.doesNotMatch(prompt, /世界杯/);
   }
@@ -22,36 +22,35 @@ test("creator chat prompt preserves evidence, safety and action contracts", asyn
   const prompt = await readProfilePrompt("creator-chat.md");
 
   assert.match(prompt, /不索要真实姓名、联系方式、学校、住址/);
-  assert.match(prompt, /不得编造数据、活动、奖励、资格、Level、曝光机会或官方承诺/);
-  assert.match(prompt, /必要时最多追问一个关键问题/);
+  assert.match(prompt, /revision 4291 一期只支持五类场景/);
+  assert.match(prompt, /本期不提供个性化灵感、Prompt 优化、可视化生成或调用发布器/);
+  assert.match(prompt, /不得编造指标、产品能力、活动规则、资格、奖励或官方承诺/);
+  assert.match(prompt, /只追问一次链接或 PID/);
   assert.match(prompt, /一句结论/);
-  assert.match(prompt, /1-3 条证据与时间/);
-  assert.match(prompt, /一个最高优先级修改/);
-  assert.match(prompt, /不承诺曝光、流量、排名、升级、积分或奖励结果/);
-  assert.match(prompt, /你不是数据计算、活动、任务、积分、消息或客户端系统/);
-  assert.match(prompt, /运营规则只能证明“规则是什么”/);
-  assert.match(prompt, /只有资格为已确认且活动有效时/);
-  assert.match(prompt, /不根据作品数据自行推算/);
+  assert.match(prompt, /1-3 条数据或内容证据及时间/);
+  assert.match(prompt, /一个最高优先级优化建议/);
+  assert.match(prompt, /不承诺曝光、流量、涨粉、积分或奖励结果/);
+  assert.match(prompt, /本交互 Agent 不读取或修改这些用户状态/);
   assert.match(prompt, /Creator Score、Type、Path、Level、Age、Barrier、L2/);
-  assert.match(prompt, /引用数据时说明 `as_of` 或时间范围/);
+  assert.match(prompt, /引用数据时说明 `as_of` 或明确时间范围/);
   assert.match(prompt, /默认使用 `responseFormat=concise`/);
-  assert.match(prompt, /不要为了“更完整”并行调用语义重叠的工具/);
+  assert.match(prompt, /一次优先选择一个，不并行调用重叠能力/);
+  assert.match(prompt, /按点赞排序的前 50 条公开评论/);
+  assert.match(prompt, /Feedback 功能/);
+  assert.match(prompt, /欢迎语由客户端注入昵称并控制只展示一次/);
 });
 
 test("creator outreach prompt preserves value gate and no-send contract", async () => {
   const prompt = await readProfilePrompt("creator-outreach.md");
 
-  assert.match(prompt, /减少打扰/);
-  assert.match(prompt, /内容与最近一次触达重复/);
-  assert.match(prompt, /当前仍处于静默窗口/);
-  assert.match(prompt, /只使用本轮查询的事实/);
+  assert.match(prompt, /不属于 revision 4291 的创作者 IM 对话场景/);
+  assert.match(prompt, /不得自行圈人/);
+  assert.match(prompt, /频控、静默、去重/);
   assert.match(prompt, /中文通常不超过 80 个字/);
   assert.match(prompt, /NO_OUTREACH: <一句话内部原因码和说明>/);
-  assert.match(prompt, /不保证曝光、奖励、资格、升级或结果/);
-  assert.match(prompt, /你只负责在活动运营中台完成硬规则筛选后/);
-  assert.match(prompt, /运营人群标签和目录搜索结果都不等于资格/);
-  assert.match(prompt, /活动有效、资格已确认、年龄路线允许、官方 action 可用/);
-  assert.match(prompt, /Creator Score、Type、Path、Level、Age、Barrier、L2/);
-  assert.match(prompt, /只调用完成当前触达判断所需的最少业务工具/);
-  assert.match(prompt, /活动状态工具为最终权威依据/);
+  assert.match(prompt, /不保证曝光、奖励、升级或结果/);
+  assert.match(prompt, /活动规则、人群、推送时间和资格均由运营中台确认/);
+  assert.match(prompt, /Creator Score、Type、Age、Country/);
+  assert.match(prompt, /每次最多调用一次 `creator_activity_status`/);
+  assert.match(prompt, /不访问 Creator Agent 的作品、评论、账号工具/);
 });

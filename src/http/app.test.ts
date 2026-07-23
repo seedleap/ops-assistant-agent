@@ -70,24 +70,17 @@ test("health is public while API routes require a valid JWT", async () => {
       "creator-chat",
       "creator-outreach",
     ]);
-    assert.equal(profiles.body.profiles[0].promptVersion, "creator-support-v4");
-    assert.equal(profiles.body.profiles[1].promptVersion, "creator-outreach-v4");
+    assert.equal(profiles.body.profiles[0].promptVersion, "creator-support-v5-rpd4291");
+    assert.equal(profiles.body.profiles[1].promptVersion, "creator-outreach-v5-rpd4291");
     assert.deepEqual(profiles.body.profiles[0].localSkills, [
       "creator-analysis",
-      "creator-inspiration",
       "creator-guide",
-      "ops-activities",
     ]);
     assert.deepEqual(profiles.body.profiles[0].toolNames, [
       "read",
-      "creator_work_resolve",
-      "creator_work_analyze",
+      "creator_project_analyze",
       "creator_comments_analyze",
-      "creator_public_work_inspect",
       "creator_account_summarize",
-      "creator_inspiration_context",
-      "creator_catalog_search",
-      "creator_activity_status",
     ]);
 
     await request(app)

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -10,6 +10,14 @@ import { JsonStore } from "../persistence/json-store.js";
 import pino from "pino";
 
 const testLogger = pino({ enabled: false });
+
+test("revision 4291 ships no enabled local outreach schedule", async () => {
+  const raw = await readFile(join(process.cwd(), "config", "scheduled-tasks.json"), "utf8");
+  const schedules = JSON.parse(raw) as Array<{ enabled: boolean; prompt: string }>;
+  assert.ok(schedules.length > 0);
+  assert.ok(schedules.every((schedule) => schedule.enabled === false));
+  assert.ok(schedules.every((schedule) => /活动后台/.test(schedule.prompt)));
+});
 
 function testConfig(dataDir: string): AppConfig {
   return {

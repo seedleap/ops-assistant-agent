@@ -16,7 +16,7 @@ const PROFILE: AgentProfile = {
   id: "creator-chat",
   traceName: "ops-creator-chat",
   prompt: {
-    version: "creator-support-v4",
+    version: "creator-support-v5-rpd4291",
     fileName: "creator-chat.md",
     file: "/tmp/creator-chat.md",
   },
@@ -32,7 +32,7 @@ const PROFILE: AgentProfile = {
     maxRetries: 2,
     compactionEnabled: true,
   },
-  toolNames: ["creator_work_analyze"],
+  toolNames: ["creator_project_analyze"],
   runType: "interactive",
   skills: [],
 };

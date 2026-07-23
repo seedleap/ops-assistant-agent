@@ -2,16 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import {
+  createCommentAnalysisTool,
+  createCreatorAccountSummaryTool,
   createCreatorActivityStatusTool,
   createCreatorSupportTools,
-  createCreatorWorkResolverTool,
   createCreatorWorksTool,
   createDataPrimitiveTools,
   createOpsDataTools,
-  createWorkAnalysisTool,
+  createProjectAnalysisTool,
   createWorkOverviewTool,
 } from "./data-tools.js";
-import type { OpsMcpToolCaller, OpsMcpToolName } from "./mcp-client.js";
+import { OPS_MCP_TOOL_NAMES, type OpsMcpToolCaller, type OpsMcpToolName } from "./mcp-client.js";
 import {
   CREATOR_SUPPORT_TOOL_BINDINGS,
   CREATOR_SUPPORT_TOOL_NAMES,
@@ -66,20 +67,18 @@ test("ops tools keep transport diagnostics out of model-facing errors", async ()
   assert.match(String(result.details.error), /private-token/);
 });
 
-test("creator-support tools preserve ownership and authority arguments", async () => {
+test("revision 4291 business tools enforce public-project and fixed-window contracts", async () => {
   const calls: Array<{ name: OpsMcpToolName; args: Record<string, unknown> }> = [];
   const client: OpsMcpToolCaller = {
     async callTool(name, args) {
       calls.push({ name, args });
-      return { structuredContent: { ok: true, as_of: "2026-07-22T00:00:00+08:00" } };
+      return { structuredContent: { ok: true, as_of: "2026-07-23T00:00:00+08:00" } };
     },
   };
 
-  await execute(createWorkAnalysisTool(client), {
-    uid: "u_1",
-    pid: "p_1",
-    windowDays: 14,
-  });
+  await execute(createProjectAnalysisTool(client), { pid: "p_public", responseFormat: "concise" });
+  await execute(createCommentAnalysisTool(client), { pid: "p_public", responseFormat: "detailed" });
+  await execute(createCreatorAccountSummaryTool(client), { uid: "u_1", responseFormat: "concise" });
   await execute(createCreatorActivityStatusTool(client), {
     uid: "u_1",
     campaignId: "campaign_1",
@@ -87,18 +86,26 @@ test("creator-support tools preserve ownership and authority arguments", async (
   });
 
   assert.deepEqual(calls, [
-    { name: "query_work_analysis", args: { uid: "u_1", pid: "p_1", windowDays: 14 } },
+    {
+      name: "query_public_work",
+      args: { pid: "p_public", responseFormat: "concise" },
+    },
+    {
+      name: "analyze_work_comments",
+      args: { pid: "p_public", responseFormat: "detailed", sort: "top_likes", limit: 50 },
+    },
+    {
+      name: "query_creator_account_summary",
+      args: { uid: "u_1", responseFormat: "concise", days: 7, topWorksLimit: 3, publishedWithinDays: 180 },
+    },
     {
       name: "query_creator_activity_status",
       args: { uid: "u_1", campaignId: "campaign_1", includeProgress: true },
     },
   ]);
-  const names = createOpsDataTools(client).map((tool) => tool.name);
-  assert.equal(names.length, new Set(names).size);
-  assert.equal(names.length, 14);
 });
 
-test("the Agent sees eight business tools while MCP primitives remain behind the boundary", async () => {
+test("the Agent-facing catalog stays smaller than the MCP primitive layer", async () => {
   const client: OpsMcpToolCaller = {
     async callTool() {
       return { structuredContent: { ok: true } };
@@ -108,6 +115,12 @@ test("the Agent sees eight business tools while MCP primitives remain behind the
   const agentTools = createCreatorSupportTools(client);
   const primitiveTools = createDataPrimitiveTools(client);
   assert.deepEqual(agentTools.map((tool) => tool.name), CREATOR_SUPPORT_TOOL_NAMES);
+  assert.deepEqual(agentTools.map((tool) => tool.name), [
+    "creator_project_analyze",
+    "creator_comments_analyze",
+    "creator_account_summarize",
+    "creator_activity_status",
+  ]);
   for (const tool of agentTools) {
     assert.ok(tool.description.length >= 80, `${tool.name} needs a decision-oriented description`);
     const schema = tool.parameters as unknown as {
@@ -126,26 +139,13 @@ test("the Agent sees eight business tools while MCP primitives remain behind the
     "query_work_prompt",
   ]);
   assert.deepEqual(new Set(DATA_PRIMITIVE_TOOL_NAMES), new Set(primitiveTools.map((tool) => tool.name)));
-  assert.equal(new Set([
-    ...agentTools.map((tool) => tool.name),
-    ...primitiveTools.map((tool) => tool.name),
-  ]).size, 14);
-
-  const calls: Array<{ name: OpsMcpToolName; args: Record<string, unknown> }> = [];
-  const routingClient: OpsMcpToolCaller = {
-    async callTool(name, args) {
-      calls.push({ name, args });
-      return { structuredContent: { ok: true } };
-    },
-  };
-  await execute(createCreatorWorkResolverTool(routingClient), {
-    uid: "u_1",
-    limit: 5,
-    publicOnly: true,
-    responseFormat: "concise",
+  assert.equal(new Set(createOpsDataTools(client).map((tool) => tool.name)).size, 10);
+  assert.deepEqual(CREATOR_SUPPORT_TOOL_BINDINGS, {
+    creator_project_analyze: "query_public_work",
+    creator_comments_analyze: "analyze_work_comments",
+    creator_account_summarize: "query_creator_account_summary",
+    creator_activity_status: "query_creator_activity_status",
   });
-  assert.deepEqual(calls, [{
-    name: CREATOR_SUPPORT_TOOL_BINDINGS.creator_work_resolve,
-    args: { uid: "u_1", limit: 5, publicOnly: true, responseFormat: "concise" },
-  }]);
+  assert.equal(OPS_MCP_TOOL_NAMES.includes("query_creator_inspiration_context" as never), false);
+  assert.equal(OPS_MCP_TOOL_NAMES.includes("search_creation_catalog" as never), false);
 });

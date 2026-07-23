@@ -1,6 +1,6 @@
 # Loopit 创作者运营 Agent
 
-面向创作者全周期支持的 Agent 服务：覆盖创作前灵感与辅助创作、创作后作品/账号/评论分析、活动任务解释和产品答疑，并通过 MCP 读取创作者、作品、目录与活动权威状态。
+对齐飞书 RPD revision 4291 的一期创作者支持 Agent：覆盖公开作品分析、公开评论总结、当前账号分析、闲聊和产品/活动文档答疑；活动配置与状态由独立后台负责。
 
 ## 当前能力
 
@@ -12,8 +12,10 @@
 - 远程业务 Skill 从 S3 物料化到会话目录，同样由 Pi 内置 `read` 工具只读加载。
 - 默认 Skill 及其 `docs/` 参考资料通过 Pi 内置 `read` 工具读取。
 - Loopit 业务数据通过 Streamable HTTP MCP 访问，不在本项目内实现数据查询逻辑。
-- `creator-analysis`、`creator-inspiration`、`creator-guide`、`ops-activities` 四个默认 Skill 按场景加载。
-- 主 Agent 只加载 8 个目的互斥的业务工具；作品画像、消费、评论、Prompt 等原子查询保留在 MCP/数据层组合。
+- Creator IM 只加载 `creator-analysis`、`creator-guide` 和 3 个目的互斥的数据业务工具。
+- 平台侧 Outreach Profile 只加载 `ops-activities` 与活动状态工具，不与 Creator IM 共用工具。
+- `creator-inspiration` 作为未来候选保留，但 revision 4291 一期不加载。
+- 作品画像、消费、评论、Prompt 等原子查询保留在 MCP/数据层组合。
 - 所有分析要求携带数据窗口或 `as_of`；Creator Score、Level、L2 等内部标签不向创作者展示。
 - `evals/tool-routing-cases.json` 固化典型场景、预期业务工具链和零工具问答，防止工具颗粒度回归。
 - 可选 Langfuse trace，记录模型、工具、Token 和费用信息。
@@ -97,3 +99,4 @@ pnpm start          # 运行构建产物
 - [`docs/CREATOR-OPERATIONS-CONTEXT.md`](docs/CREATOR-OPERATIONS-CONTEXT.md)
 - [`docs/CREATOR-SUPPORT-ARCHITECTURE.md`](docs/CREATOR-SUPPORT-ARCHITECTURE.md)
 - [`docs/AGENT-TOOL-DESIGN-RESEARCH.md`](docs/AGENT-TOOL-DESIGN-RESEARCH.md)
+- [`docs/RPD-REVISION-4291-DELTA.md`](docs/RPD-REVISION-4291-DELTA.md)

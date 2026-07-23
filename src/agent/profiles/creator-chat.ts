@@ -4,7 +4,7 @@ export const CREATOR_CHAT_PROFILE = {
   runType: "interactive",
   traceName: "ops-creator-chat",
   prompt: {
-    version: "creator-support-v4",
+    version: "creator-support-v5-rpd4291",
     fileName: "creator-chat.md",
   },
   model: {
@@ -21,15 +21,10 @@ export const CREATOR_CHAT_PROFILE = {
   },
   toolNames: [
     "read",
-    "creator_work_resolve",
-    "creator_work_analyze",
+    "creator_project_analyze",
     "creator_comments_analyze",
-    "creator_public_work_inspect",
     "creator_account_summarize",
-    "creator_inspiration_context",
-    "creator_catalog_search",
-    "creator_activity_status",
   ],
-  localSkills: ["creator-analysis", "creator-inspiration", "creator-guide", "ops-activities"],
+  localSkills: ["creator-analysis", "creator-guide"],
   skills: [],
 } as const satisfies AgentProfileDefinition;
