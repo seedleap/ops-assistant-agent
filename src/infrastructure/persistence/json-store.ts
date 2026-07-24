@@ -15,6 +15,7 @@ import type {
 } from "../../domain/types.js";
 import type { ConversationArchive } from "./conversation-archive.js";
 import { buildCreatorMemory } from "./creator-memory.js";
+import { isValidTimeZone } from "../../runtime/time-context.js";
 
 const DEFAULT_THREAD_ID = "default";
 
@@ -36,6 +37,28 @@ function initialState(): StoreState {
     runs: [],
     outbox: [],
   };
+}
+
+function normalizeCreatorMemories(value: unknown): CreatorMemoryRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const record = item as Record<string, unknown>;
+    if (typeof record.userId !== "string" || typeof record.updatedAt !== "string") return [];
+    const stablePreferences = Array.isArray(record.stablePreferences)
+      ? record.stablePreferences.filter((entry): entry is string => typeof entry === "string").slice(-8)
+      : [];
+    const timezone = typeof record.timezone === "string" && isValidTimeZone(record.timezone)
+      ? record.timezone
+      : undefined;
+    return [{
+      userId: record.userId,
+      schemaVersion: 2 as const,
+      stablePreferences,
+      ...(timezone ? { timezone } : {}),
+      updatedAt: record.updatedAt,
+    }];
+  });
 }
 
 /*
@@ -63,7 +86,7 @@ export class JsonStore {
     // 兼容旧版 MVP 的 state.json：首次启动时补齐 sessions，不丢历史消息。
     return new JsonStore(filePath, {
       conversations: parsed.conversations ?? [],
-      creatorMemories: parsed.creatorMemories ?? [],
+      creatorMemories: normalizeCreatorMemories(parsed.creatorMemories),
       sessions: parsed.sessions ?? [],
       messages: parsed.messages ?? [],
       schedules: parsed.schedules ?? [],
@@ -201,10 +224,10 @@ export class JsonStore {
     const session = sessionId ? this.getSession(sessionId) : undefined;
     const memory = this.getCreatorMemory(userId);
     const lines: string[] = [];
-    if (memory && (memory.stablePreferences.length > 0 || memory.recentProjectRefs.length > 0)) {
+    if (memory && (memory.stablePreferences.length > 0 || memory.timezone)) {
       lines.push(`<structured_memory>\n${JSON.stringify({
         stable_preferences: memory.stablePreferences,
-        recent_project_refs: memory.recentProjectRefs,
+        ...(memory.timezone ? { timezone: memory.timezone } : {}),
         updated_at: memory.updatedAt,
       })}\n</structured_memory>`);
     }
@@ -214,7 +237,12 @@ export class JsonStore {
     return lines.join("\n\n").slice(0, 12_000);
   }
 
-  async updateConversationSummary(userId: string, imThreadId: string, sessionId?: string): Promise<void> {
+  async updateConversationSummary(
+    userId: string,
+    imThreadId: string,
+    sessionId?: string,
+    timezone?: string,
+  ): Promise<void> {
     // 摘要只从最近可见消息重建，不能把旧 summary 再嵌套进去导致无限膨胀。
     const allUserMessages = this.state.messages
       .filter((message) => message.userId === userId && message.role === "user")
@@ -230,7 +258,13 @@ export class JsonStore {
       : "";
     const conversation = await this.ensureConversation(userId, imThreadId);
     conversation.summary = context.slice(0, 6_000);
-    const memory = buildCreatorMemory(userId, allUserMessages, nowIso(), this.getCreatorMemory(userId));
+    const memory = buildCreatorMemory(
+      userId,
+      allUserMessages,
+      nowIso(),
+      this.getCreatorMemory(userId),
+      timezone,
+    );
     const existingMemoryIndex = this.state.creatorMemories.findIndex((item) => item.userId === userId);
     if (existingMemoryIndex >= 0) this.state.creatorMemories[existingMemoryIndex] = memory;
     else this.state.creatorMemories.push(memory);

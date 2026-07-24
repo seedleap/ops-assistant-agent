@@ -22,6 +22,7 @@ import { KeyedMutex } from "../concurrency/keyedMutex.js";
 import { writeFileAtomic } from "../runtime/atomic-file.js";
 import { conversationKey, conversationWorkDir } from "../runtime/paths.js";
 import { ConversationArchiveStore } from "../infrastructure/persistence/conversation-archive.js";
+import { isValidTimeZone } from "../runtime/time-context.js";
 import {
   deleteDoc,
   isCollection,
@@ -126,6 +127,7 @@ const messageSchema = z.object({
   text: z.string().trim().min(1).max(100_000),
   reply: z.boolean().optional().default(false),
   creatorUid: z.string().trim().min(1).max(128).optional(),
+  timezone: z.string().trim().min(1).max(100).refine(isValidTimeZone, "invalid IANA timezone").optional(),
   model: z.string().trim().min(1).max(200).optional(),
   sessionMode: z.enum(["continue", "new"]).optional().default("continue"),
 });
@@ -441,6 +443,9 @@ app.post("/im/messages", async (req, res, next) => {
           continueSession: session.continueSession,
           contextBootstrap: session.contextBootstrap,
           creatorUid: input.creatorUid,
+          timezone: input.timezone,
+          rememberedTimezone: store.getCreatorMemory(input.userId)?.timezone,
+          requestTime: new Date().toISOString(),
           model: input.model,
         });
         if (!output.trim()) throw new Error("Agent returned an empty response");
@@ -454,7 +459,7 @@ app.post("/im/messages", async (req, res, next) => {
           text: output,
           sourceRunId: runId,
         });
-        await store.updateConversationSummary(input.userId, imThreadId, session.sessionId);
+        await store.updateConversationSummary(input.userId, imThreadId, session.sessionId, input.timezone);
         void archiveConversation(input.userId, imThreadId).catch((error) => {
           logger.warn({ err: error, userId: input.userId, imThreadId }, "conversation archive failed");
         });
@@ -541,6 +546,9 @@ app.post("/im/stream", async (req, res, next) => {
         continueSession: session.continueSession,
         contextBootstrap: session.contextBootstrap,
         creatorUid: input.creatorUid,
+        timezone: input.timezone,
+        rememberedTimezone: store.getCreatorMemory(input.userId)?.timezone,
+        requestTime: new Date().toISOString(),
         model: input.model,
       },
       (event) => send(event),
@@ -555,7 +563,7 @@ app.post("/im/stream", async (req, res, next) => {
       sourceRunId: runId,
     });
     await store.touchSession(session.sessionId, { runId });
-    await store.updateConversationSummary(input.userId, imThreadId, session.sessionId);
+    await store.updateConversationSummary(input.userId, imThreadId, session.sessionId, input.timezone);
     void archiveConversation(input.userId, imThreadId).catch((error) => {
       logger.warn({ err: error, userId: input.userId, imThreadId }, "conversation archive failed");
     });

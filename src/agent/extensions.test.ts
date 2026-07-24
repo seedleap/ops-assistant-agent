@@ -16,7 +16,7 @@ const PROFILE: AgentProfile = {
   id: "creator-chat",
   traceName: "ops-creator-chat",
   prompt: {
-    version: "creator-support-v6-memory",
+    version: "creator-support-v7-time-context",
     fileName: "creator-chat.md",
     file: "/tmp/creator-chat.md",
   },

@@ -15,9 +15,9 @@ export interface ConversationRecord {
 
 export interface CreatorMemoryRecord {
   userId: string;
-  schemaVersion: 1;
+  schemaVersion: 2;
   stablePreferences: string[];
-  recentProjectRefs: string[];
+  timezone?: string;
   updatedAt: ISODateString;
 }
 
@@ -111,5 +111,8 @@ export interface AssistantRunInput {
   sessionMode?: SessionMode;
   contextBootstrap?: string;
   creatorUid?: string;
+  timezone?: string;
+  rememberedTimezone?: string;
+  requestTime?: ISODateString;
   model?: string;
 }

@@ -31,7 +31,7 @@ test("each Agent Profile owns its prompt, tools and runtime policy", () => {
 
   const chat = resolveAgentProfileById(config, "creator-chat");
   assert.equal(chat.prompt.file, resolve("/tmp/ops-agent-prompts/creator-chat.md"));
-  assert.equal(chat.prompt.version, "creator-support-v6-memory");
+  assert.equal(chat.prompt.version, "creator-support-v7-time-context");
   assert.equal(chat.runtime.maxTurns, 12);
   assert.equal(chat.runtime.maxRetries, 2);
   assert.equal(chat.runtime.compactionEnabled, true);

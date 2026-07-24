@@ -4,7 +4,7 @@ export const CREATOR_CHAT_PROFILE = {
   runType: "interactive",
   traceName: "ops-creator-chat",
   prompt: {
-    version: "creator-support-v6-memory",
+    version: "creator-support-v7-time-context",
     fileName: "creator-chat.md",
   },
   model: {

@@ -70,7 +70,7 @@ test("health is public while API routes require a valid JWT", async () => {
       "creator-chat",
       "creator-outreach",
     ]);
-    assert.equal(profiles.body.profiles[0].promptVersion, "creator-support-v6-memory");
+    assert.equal(profiles.body.profiles[0].promptVersion, "creator-support-v7-time-context");
     assert.equal(profiles.body.profiles[1].promptVersion, "creator-outreach-v6-contract");
     assert.deepEqual(profiles.body.profiles[0].localSkills, [
       "analyze-project",
@@ -112,6 +112,11 @@ test("health is public while API routes require a valid JWT", async () => {
       .post("/im/messages")
       .set("Authorization", `Bearer ${token}`)
       .send({ userId: "u".repeat(129), text: "hello" })
+      .expect(400);
+    await request(app)
+      .post("/im/messages")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ userId: "u1", text: "hello", timezone: "Mars/Olympus" })
       .expect(400);
   } finally {
     await rm(dataDir, { recursive: true, force: true });

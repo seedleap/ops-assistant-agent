@@ -33,8 +33,11 @@ test("creator chat prompt preserves evidence, safety and action contracts", asyn
   assert.match(prompt, /默认 `detail_level=summary`/);
   assert.match(prompt, /data \/ meta \/ error/);
   assert.match(prompt, /stable_preferences/);
+  assert.match(prompt, /time_context/);
+  assert.match(prompt, /当前 UTC 时间、当前采用的时区、本地时间和时区来源/);
   assert.match(prompt, /记忆只用于减少重复追问/);
-  assert.match(prompt, /明确要求忘掉偏好或清除记忆/);
+  assert.doesNotMatch(prompt, /recent_project_refs/);
+  assert.doesNotMatch(prompt, /清除记忆/);
   assert.match(prompt, /仅当客户端明确标记“首次进入”时发送/);
 });
 
